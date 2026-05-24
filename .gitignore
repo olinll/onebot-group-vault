@@ -1,0 +1,6 @@
+node_modules/
+dist/
+storage/
+.claude/
+config.json
+*.log

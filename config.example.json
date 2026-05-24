@@ -1,0 +1,9 @@
+{
+  "port": 6100,
+  "host": "0.0.0.0",
+  "publicHost": "your-server-ip",
+  "token": "your-napcat-token",
+  "wsUrl": "ws://your-napcat-host:6101",
+  "groupId": 123456789,
+  "prod": false
+}

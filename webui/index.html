@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>group-vault</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { brand: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' } } } }
+    }
+  </script>
+  <style>
+    .tag-dot-0 { background: #dbeafe; color: #1d4ed8; }
+    .tag-dot-1 { background: #fce7f3; color: #be185d; }
+    .tag-dot-2 { background: #d1fae5; color: #065f46; }
+    .tag-dot-3 { background: #fef3c7; color: #92400e; }
+    .tag-dot-4 { background: #ede9fe; color: #6d28d9; }
+    .lightbox-backdrop { backdrop-filter: blur(8px); }
+    .batch-bar { transition: transform 0.25s ease, opacity 0.25s ease; }
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .msg-body-collapse { max-height: 120px; overflow: hidden; position: relative; }
+    .msg-body-collapse::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, #fff); pointer-events: none; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-14 flex items-center justify-between gap-2">
+      <h1 class="text-base sm:text-lg font-semibold text-gray-900 shrink-0">group-vault</h1>
+      <nav class="flex gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 text-xs sm:text-sm">
+        <button id="navGallery" onclick="switchView('gallery')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors bg-white text-gray-900 shadow-sm">画廊</button>
+        <button id="navMessages" onclick="switchView('messages')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-gray-500 hover:text-gray-700">消息</button>
+        <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Toolbar -->
+  <div class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 flex-wrap">
+      <select id="dateFilter" onchange="loadData()" class="text-xs sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+        <option value="">全部日期</option>
+      </select>
+      <select id="tagFilter" onchange="loadData()" class="text-xs sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+        <option value="">全部标签</option>
+      </select>
+      <button id="btnBatchMode" onclick="toggleBatchMode()" class="hidden text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+        <span id="batchModeLabel">多选</span>
+      </button>
+      <span id="stats" class="ml-auto text-xs sm:text-sm text-gray-500"></span>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+    <div id="galleryView" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4"></div>
+    <div id="messagesView" class="hidden flex flex-col gap-2 sm:gap-3"></div>
+    <div id="pagination" class="flex justify-center gap-1.5 sm:gap-2 mt-6 sm:mt-8"></div>
+    <div id="empty" class="hidden text-center py-16 sm:py-20 text-gray-400 text-sm">暂无数据</div>
+  </main>
+
+  <!-- Batch Action Bar -->
+  <div id="batchBar" class="batch-bar fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40 transform translate-y-full opacity-0">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3">
+      <span id="batchCount" class="text-xs sm:text-sm font-medium text-gray-700 shrink-0">已选 0</span>
+      <input id="batchTagInput" placeholder="输入标签（空格分隔）..." class="flex-1 min-w-0 text-xs sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+      <button onclick="batchAddTags()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-brand-600 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors shrink-0">添加</button>
+      <button onclick="batchRemoveTags()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-red-50 text-red-600 text-xs sm:text-sm font-medium rounded-lg hover:bg-red-100 transition-colors shrink-0">移除</button>
+      <button onclick="exitBatchMode()" class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-500 hover:text-gray-700 shrink-0">取消</button>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="hidden fixed inset-0 z-50 bg-black/90 lightbox-backdrop flex-col items-center justify-center p-4" onclick="if(event.target===this)closeLightbox()">
+    <button onclick="closeLightbox()" class="absolute top-3 right-3 sm:top-4 sm:right-4 text-white/70 hover:text-white transition-colors z-10">
+      <svg class="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <button onclick="navLightbox(event,-1)" class="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors z-10">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+    <button onclick="navLightbox(event,1)" class="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors z-10">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <img id="lightboxImg" class="max-w-[90vw] sm:max-w-[85vw] max-h-[60vh] sm:max-h-[70vh] object-contain rounded-lg shadow-2xl" src="">
+    <div id="lbTags" class="mt-3 sm:mt-4 flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center max-w-[90vw] sm:max-w-[80vw]"></div>
+    <div class="mt-2 sm:mt-3 flex gap-2">
+      <input id="lbTagInput" placeholder="输入标签..." onkeydown="if(event.key==='Enter')addTagFromInput()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-white/10 text-white placeholder-white/40 rounded-full text-xs sm:text-sm outline-none focus:bg-white/20 w-36 sm:w-48 transition-colors">
+      <button onclick="addTagFromInput()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-brand-600 text-white rounded-full text-xs sm:text-sm hover:bg-brand-700 transition-colors">添加</button>
+    </div>
+    <div class="mt-2 sm:mt-3">
+      <button onclick="deleteCurrentImage()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-red-600/80 text-white rounded-full text-xs sm:text-sm hover:bg-red-600 transition-colors">删除图片</button>
+    </div>
+  </div>
+
+<script>
+  let currentView = 'gallery';
+  let currentPage = 1;
+  let imageList = [];
+  let lightboxIndex = 0;
+  let batchMode = false;
+  let selectedPaths = new Set();
+
+  function tagClass(i) { return 'tag-dot-' + (i % 5); }
+
+  function renderTags(tags) {
+    if (!tags || !tags.length) return '';
+    return tags.map((t, i) =>
+      `<span class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${tagClass(i)}">${esc(t)}</span>`
+    ).join('');
+  }
+
+  async function loadDates() {
+    const res = await fetch('/api/dates');
+    const dates = await res.json();
+    const sel = document.getElementById('dateFilter');
+    dates.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.date;
+      opt.textContent = `${d.date} (${d.count})`;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function loadTagOptions() {
+    const res = await fetch('/api/tags');
+    const tags = await res.json();
+    const sel = document.getElementById('tagFilter');
+    while (sel.options.length > 1) sel.remove(1);
+    tags.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.tag;
+      opt.textContent = `${t.tag} (${t.count})`;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function loadData() {
+    const date = document.getElementById('dateFilter').value;
+    const tag = document.getElementById('tagFilter').value;
+    currentPage = 1;
+    if (currentView === 'gallery') await loadGallery(date, 1, tag);
+    else await loadMessages(date, 1, tag);
+  }
+
+  async function loadGallery(date, page, tag) {
+    page = page || 1;
+    const params = new URLSearchParams({ page, limit: 60 });
+    if (date) params.set('date', date);
+    if (tag) params.set('tag', tag);
+    const res = await fetch(`/api/images?${params}`);
+    const data = await res.json();
+    imageList = data.items;
+
+    const container = document.getElementById('galleryView');
+    const empty = document.getElementById('empty');
+    const batchBtn = document.getElementById('btnBatchMode');
+
+    if (data.items.length === 0) {
+      container.innerHTML = '';
+      empty.classList.remove('hidden');
+      batchBtn.classList.add('hidden');
+    } else {
+      empty.classList.add('hidden');
+      batchBtn.classList.remove('hidden');
+      container.innerHTML = data.items.map((img, i) => `
+        <div class="group relative bg-white rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer fade-in ${selectedPaths.has(img.localPath) ? 'ring-2 ring-brand-500' : ''}"
+             onclick="${batchMode ? `toggleSelect('${escJs(img.localPath)}')` : `openLightbox(${i})`}"
+             data-path="${esc(img.localPath)}">
+          ${batchMode ? `
+            <div class="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 ${selectedPaths.has(img.localPath) ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300'} flex items-center justify-center">
+              ${selectedPaths.has(img.localPath) ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+            </div>` : ''}
+          <button class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  onclick="event.stopPropagation();deleteImage(${i})" title="删除">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+          <img src="${img.url}" alt="" loading="lazy" class="w-full h-32 sm:h-48 object-cover">
+          <div class="p-1.5 sm:p-2.5">
+            <div class="text-[10px] sm:text-xs font-medium text-gray-900 truncate">${esc(img.nickname || String(img.user_id))}</div>
+            <div class="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">${new Date(img.time * 1000).toLocaleString()}</div>
+            ${img.tags && img.tags.length ? `<div class="mt-1 flex gap-0.5 sm:gap-1 flex-wrap">${renderTags(img.tags)}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('stats').textContent = `${data.total} 张图片`;
+    renderPagination(data.total, data.limit, page, (p) => loadGallery(date, p, tag));
+  }
+
+  async function loadMessages(date, page, tag) {
+    page = page || 1;
+    const params = new URLSearchParams({ page, limit: 30 });
+    if (date) params.set('date', date);
+    if (tag) params.set('tag', tag);
+    const res = await fetch(`/api/messages?${params}`);
+    const data = await res.json();
+
+    const container = document.getElementById('messagesView');
+    const empty = document.getElementById('empty');
+
+    if (data.items.length === 0) {
+      container.innerHTML = '';
+      empty.classList.remove('hidden');
+    } else {
+      empty.classList.add('hidden');
+      container.innerHTML = data.items.map(msg => {
+        const imgSegs = msg.segments.filter(s => s.type === 'image' && s.data.localPath);
+        const imgHtml = imgSegs.length
+          ? `<div class="flex gap-1.5 sm:gap-2 flex-wrap mt-2">${imgSegs.map(s =>
+              `<img src="/downloads/${s.data.localPath}" onclick="openLightboxUrl('/downloads/${s.data.localPath}')" loading="lazy" class="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity">`
+            ).join('')}</div>`
+          : '';
+
+        const body = msg.segments.filter(s => s.type !== 'image' || !s.data.localPath).map(seg => {
+          switch (seg.type) {
+            case 'text': return `<p class="text-xs sm:text-sm text-gray-700 leading-relaxed">${esc(seg.data.text || '')}</p>`;
+            case 'image': return `<p class="text-xs sm:text-sm text-gray-400 italic">[图片: ${esc(seg.data.file || '')}]</p>`;
+            case 'file':
+              if (seg.data.localPath) return `<a href="/downloads/${seg.data.localPath}" target="_blank" class="inline-flex items-center gap-1 text-xs sm:text-sm text-brand-600 hover:text-brand-700 mt-1">📎 ${esc(seg.data.file || '文件')}</a>`;
+              return `<p class="text-xs sm:text-sm text-gray-400">[文件: ${esc(seg.data.file || '')}]</p>`;
+            case 'forward': return `<div class="bg-amber-50 border-l-3 border-amber-400 px-2 sm:px-3 py-1.5 sm:py-2 rounded text-xs sm:text-sm text-amber-800 mt-1">转发消息 ID: ${esc(seg.data.id || '')}</div>`;
+            case 'at': return `<span class="text-brand-600 text-xs sm:text-sm">@${esc(seg.data.name || seg.data.qq)}</span>`;
+            default: return `<p class="text-xs sm:text-sm text-gray-400">[${esc(seg.type)}]</p>`;
+          }
+        }).join('');
+
+        const filePaths = msg.segments.filter(s => s.data?.localPath).map(s => s.data.localPath);
+
+        return `
+          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in">
+            <div class="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+              <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs sm:text-sm font-medium shrink-0">${(msg.nickname || '?')[0]}</div>
+              <span class="text-xs sm:text-sm font-medium text-gray-900 truncate">${esc(msg.nickname || String(msg.user_id))}</span>
+              <span class="text-[10px] sm:text-xs text-gray-400 ml-auto shrink-0">${new Date(msg.time * 1000).toLocaleString()}</span>
+              ${filePaths.length ? `<button onclick="deleteMsgFiles(this)" data-paths='${esc(JSON.stringify(filePaths))}' class="text-[10px] sm:text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-1.5 sm:px-2 py-0.5 rounded transition-colors shrink-0">删除</button>` : ''}
+            </div>
+            <div class="pl-9 sm:pl-11 msg-body-auto">${imgHtml}${body}</div>
+            <button class="hidden mt-1 ml-9 sm:ml-11 text-[10px] sm:text-xs text-brand-600 hover:text-brand-700" onclick="toggleCollapse(this)">展开</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('stats').textContent = `${data.total} 条消息`;
+    renderPagination(data.total, data.limit, page, (p) => loadMessages(date, p, tag));
+    applyAutoCollapse();
+  }
+
+  function renderPagination(total, limit, current, callback) {
+    const pages = Math.ceil(total / limit);
+    const container = document.getElementById('pagination');
+    if (pages <= 1) { container.innerHTML = ''; return; }
+
+    const btn = (text, disabled, active) =>
+      `<button ${disabled ? 'disabled' : ''} class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-lg border ${disabled ? 'border-gray-200 text-gray-300' : active ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'} transition-colors">${text}</button>`;
+
+    let html = btn('上一页', current <= 1, false);
+    for (let i = 1; i <= Math.min(pages, 10); i++) {
+      html += btn(String(i), false, i === current);
+    }
+    html += btn('下一页', current >= pages, false);
+    container.innerHTML = html;
+
+    container.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const t = b.textContent;
+        if (t === '上一页') callback(current - 1);
+        else if (t === '下一页') callback(current + 1);
+        else { const p = parseInt(t); if (!isNaN(p)) callback(p); }
+      });
+    });
+  }
+
+  function switchView(view) {
+    currentView = view;
+    exitBatchMode();
+    document.getElementById('navGallery').className = `px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-xs sm:text-sm ${view === 'gallery' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`;
+    document.getElementById('navMessages').className = `px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-xs sm:text-sm ${view === 'messages' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`;
+    document.getElementById('galleryView').classList.toggle('hidden', view !== 'gallery');
+    document.getElementById('messagesView').classList.toggle('hidden', view !== 'messages');
+    loadData();
+  }
+
+  // ── Lightbox ───────────────────────────────────────────
+
+  function openLightbox(index) {
+    lightboxIndex = index;
+    updateLightbox();
+    document.getElementById('lightbox').classList.remove('hidden');
+    document.getElementById('lightbox').classList.add('flex');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function openLightboxUrl(url) {
+    const idx = imageList.findIndex(img => img.url === url || `/downloads/${img.localPath}` === url);
+    if (idx >= 0) lightboxIndex = idx;
+    updateLightbox();
+    document.getElementById('lightbox').classList.remove('hidden');
+    document.getElementById('lightbox').classList.add('flex');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function updateLightbox() {
+    const img = imageList[lightboxIndex];
+    if (!img) return;
+    document.getElementById('lightboxImg').src = img.url;
+    renderLightboxTags(img);
+  }
+
+  function renderLightboxTags(img) {
+    const container = document.getElementById('lbTags');
+    const tags = img.tags || [];
+    container.innerHTML = tags.length
+      ? tags.map((t, i) =>
+          `<span class="inline-flex items-center px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${tagClass(i)}">${esc(t)}<span class="ml-1 sm:ml-1.5 cursor-pointer opacity-60 hover:opacity-100" onclick="removeTag('${escJs(img.localPath)}','${escJs(t)}')">&times;</span></span>`
+        ).join('')
+      : '<span class="text-white/40 text-xs sm:text-sm">暂无标签</span>';
+  }
+
+  async function addTagFromInput() {
+    const input = document.getElementById('lbTagInput');
+    const tagsRaw = input.value.trim();
+    if (!tagsRaw) return;
+    const img = imageList[lightboxIndex];
+    if (!img) return;
+
+    const newTags = tagsRaw.split(/\s+/).filter(t => t);
+    const tags = [...(img.tags || [])];
+    for (const t of newTags) { if (!tags.includes(t)) tags.push(t); }
+    await saveTags(img.localPath, tags);
+    img.tags = tags;
+    renderLightboxTags(img);
+    input.value = '';
+    loadTagOptions();
+  }
+
+  async function removeTag(localPath, tag) {
+    const img = imageList[lightboxIndex];
+    if (!img) return;
+    const tags = (img.tags || []).filter(t => t !== tag);
+    await saveTags(localPath, tags);
+    img.tags = tags;
+    renderLightboxTags(img);
+    loadTagOptions();
+  }
+
+  async function saveTags(localPath, tags) {
+    await fetch('/api/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localPath, tags }),
+    });
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.add('hidden');
+    document.getElementById('lightbox').classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+
+  function navLightbox(e, dir) {
+    e.stopPropagation();
+    if (!imageList.length) return;
+    lightboxIndex = (lightboxIndex + dir + imageList.length) % imageList.length;
+    updateLightbox();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const lb = document.getElementById('lightbox');
+    if (lb.classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft') navLightbox(e, -1);
+    if (e.key === 'ArrowRight') navLightbox(e, 1);
+  });
+
+  // ── Batch Mode ─────────────────────────────────────────
+
+  function toggleBatchMode() { batchMode ? exitBatchMode() : enterBatchMode(); }
+
+  function enterBatchMode() {
+    batchMode = true;
+    selectedPaths.clear();
+    document.getElementById('batchModeLabel').textContent = '退出多选';
+    document.getElementById('btnBatchMode').classList.add('bg-brand-50', 'text-brand-700', 'border-brand-300');
+    updateBatchBar();
+    loadGallery(document.getElementById('dateFilter').value, currentPage, document.getElementById('tagFilter').value);
+  }
+
+  function exitBatchMode() {
+    batchMode = false;
+    selectedPaths.clear();
+    document.getElementById('batchModeLabel').textContent = '多选';
+    document.getElementById('btnBatchMode').classList.remove('bg-brand-50', 'text-brand-700', 'border-brand-300');
+    document.getElementById('batchBar').classList.add('translate-y-full', 'opacity-0');
+    if (currentView === 'gallery') loadGallery(document.getElementById('dateFilter').value, currentPage, document.getElementById('tagFilter').value);
+  }
+
+  function toggleSelect(localPath) {
+    selectedPaths.has(localPath) ? selectedPaths.delete(localPath) : selectedPaths.add(localPath);
+    updateBatchBar();
+    const card = document.querySelector(`[data-path="${CSS.escape(localPath)}"]`);
+    if (card) {
+      card.classList.toggle('ring-2', selectedPaths.has(localPath));
+      card.classList.toggle('ring-brand-500', selectedPaths.has(localPath));
+      const check = card.querySelector('div[class*="absolute"][class*="top"]');
+      if (check && check.querySelector('svg')) {
+        check.className = `absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 flex items-center justify-center ${selectedPaths.has(localPath) ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300'}`;
+        check.innerHTML = selectedPaths.has(localPath)
+          ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
+          : '';
+      }
+    }
+  }
+
+  function updateBatchBar() {
+    const bar = document.getElementById('batchBar');
+    document.getElementById('batchCount').textContent = `已选 ${selectedPaths.size}`;
+    selectedPaths.size > 0 ? bar.classList.remove('translate-y-full', 'opacity-0') : bar.classList.add('translate-y-full', 'opacity-0');
+  }
+
+  async function batchAddTags() {
+    const input = document.getElementById('batchTagInput');
+    const tagsRaw = input.value.trim();
+    if (!tagsRaw || selectedPaths.size === 0) return;
+    const tags = tagsRaw.split(/\s+/).filter(t => t);
+    const res = await fetch('/api/tags/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localPaths: [...selectedPaths], tags, mode: 'add' }),
+    });
+    const data = await res.json();
+    if (data.ok) { input.value = ''; exitBatchMode(); loadTagOptions(); loadData(); }
+  }
+
+  async function batchRemoveTags() {
+    const input = document.getElementById('batchTagInput');
+    const tagsRaw = input.value.trim();
+    if (!tagsRaw || selectedPaths.size === 0) return;
+    const tags = tagsRaw.split(/\s+/).filter(t => t);
+    const res = await fetch('/api/tags/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localPaths: [...selectedPaths], tags, mode: 'remove' }),
+    });
+    const data = await res.json();
+    if (data.ok) { input.value = ''; exitBatchMode(); loadTagOptions(); loadData(); }
+  }
+
+  // ── Utilities ──────────────────────────────────────────
+
+  function applyAutoCollapse() {
+    document.querySelectorAll('.msg-body-auto').forEach(el => {
+      if (el.scrollHeight > 140) {
+        el.classList.add('msg-body-collapse');
+        el.nextElementSibling.classList.remove('hidden');
+        el.nextElementSibling.textContent = '展开';
+      }
+      el.classList.remove('msg-body-auto');
+    });
+  }
+
+  function toggleCollapse(btn) {
+    const body = btn.previousElementSibling;
+    const collapsed = body.classList.toggle('msg-body-collapse');
+    btn.textContent = collapsed ? '展开' : '收起';
+  }
+
+  function esc(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+  function escJs(text) { return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+  async function deleteImage(index) {
+    const img = imageList[index];
+    if (!img) return;
+    if (!await showConfirm(`确认删除此图片？\n${img.file || img.localPath}`)) return;
+    const res = await fetch(`/api/files/${img.localPath}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) { imageList.splice(index, 1); loadData(); }
+  }
+
+  async function deleteCurrentImage() { await deleteImage(lightboxIndex); closeLightbox(); }
+
+  async function deleteMsgFiles(btn) {
+    const paths = JSON.parse(btn.dataset.paths);
+    if (!await showConfirm(`确认删除 ${paths.length} 个文件？`)) return;
+    for (const p of paths) await fetch(`/api/files/${p}`, { method: 'DELETE' });
+    loadData();
+  }
+
+  Promise.all([loadDates(), loadTagOptions()]).then(() => loadData());
+
+  // CSS 确认弹窗
+  function showConfirm(message) {
+    return new Promise(resolve => {
+      const overlay = document.getElementById('confirmOverlay');
+      document.getElementById('confirmMsg').textContent = message;
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      const okBtn = document.getElementById('confirmOk');
+      const cancelBtn = document.getElementById('confirmCancel');
+      function cleanup(result) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onBg);
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      function onBg(e) { if (e.target === overlay) cleanup(false); }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onBg);
+    });
+  }
+</script>
+
+<!-- 确认弹窗 -->
+<div id="confirmOverlay" class="hidden fixed inset-0 z-[100] bg-black/40 items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-[fadeIn_0.15s_ease]">
+    <p id="confirmMsg" class="text-sm text-gray-700 whitespace-pre-line mb-6"></p>
+    <div class="flex justify-end gap-3">
+      <button id="confirmCancel" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">取消</button>
+      <button id="confirmOk" class="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">确认删除</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
