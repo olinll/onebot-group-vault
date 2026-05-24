@@ -22,6 +22,12 @@ export function createMessageHandler(sender: MessageSender) {
 
     if (!config.prod) console.log(`[MSG] group=${event.group_id} user=${event.user_id} text="${text}"`);
 
+    // ── Silent mode: only collect images, no responses ─────
+    if (config.silent) {
+      if (isTargetGroup) await processMessage(event);
+      return;
+    }
+
     // ── #tag command: works in ALL groups ──────────────────
     if (text.startsWith('#') && text.length > 1) {
       if (text === '#tags' || text === '#标签') {

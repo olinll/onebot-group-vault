@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>去重 - group-vault</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { brand: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' } } } }
+    }
+  </script>
+  <style>
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-14 flex items-center justify-between">
+      <h1 class="text-base sm:text-lg font-semibold text-gray-900">group-vault</h1>
+      <nav class="flex gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 text-xs sm:text-sm">
+        <a href="/" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">画廊</a>
+        <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
+        <a href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium bg-white text-gray-900 shadow-sm">去重</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <!-- Controls -->
+    <div class="flex items-center gap-3 sm:gap-4 mb-6">
+      <button id="scanBtn" onclick="startScan()" class="px-4 sm:px-5 py-2 sm:py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        扫描重复图片
+      </button>
+      <span id="status" class="text-xs sm:text-sm text-gray-500"></span>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm sm:text-base font-semibold text-gray-900">
+          发现 <span id="groupCount" class="text-brand-600">0</span> 组重复，共 <span id="dupCount" class="text-brand-600">0</span> 张图片
+        </h2>
+        <button id="deleteBtn" onclick="deleteSelected()" class="hidden px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50">
+          删除选中 (<span id="selectedCount">0</span>)
+        </button>
+      </div>
+      <div id="groupsList" class="space-y-6"></div>
+    </div>
+  </main>
+
+  <!-- Confirm modal -->
+  <div id="confirmOverlay" class="hidden fixed inset-0 z-[100] bg-black/40 items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+      <p id="confirmMsg" class="text-sm text-gray-700 whitespace-pre-line mb-6"></p>
+      <div class="flex justify-end gap-3">
+        <button onclick="closeConfirm(false)" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">取消</button>
+        <button onclick="closeConfirm(true)" class="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let groups = [];
+  let selectedPaths = new Set();
+
+  async function startScan() {
+    const btn = document.getElementById('scanBtn');
+    const status = document.getElementById('status');
+    const results = document.getElementById('results');
+
+    btn.disabled = true;
+    status.textContent = '扫描中，请稍候...';
+    results.classList.add('hidden');
+
+    try {
+      const res = await fetch('/api/dedup/scan');
+      const data = await res.json();
+      groups = data.groups || [];
+      selectedPaths.clear();
+
+      status.textContent = `扫描完成，共扫描 ${data.total} 张图片`;
+
+      if (groups.length === 0) {
+        status.textContent += '，未发现重复图片';
+        results.classList.add('hidden');
+      } else {
+        renderGroups();
+        results.classList.remove('hidden');
+      }
+    } catch (err) {
+      status.textContent = '扫描失败: ' + err.message;
+    }
+    btn.disabled = false;
+  }
+
+  function renderGroups() {
+    const list = document.getElementById('groupsList');
+    document.getElementById('groupCount').textContent = groups.length;
+
+    let totalDups = 0;
+    for (const g of groups) totalDups += g.images.length;
+    document.getElementById('dupCount').textContent = totalDups;
+
+    list.innerHTML = groups.map((group, gi) => {
+      return `
+        <div class="bg-white rounded-xl shadow-sm p-4 sm:p-5 fade-in">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-gray-400">第 ${gi + 1} 组 · ${group.images.length} 张</span>
+            <button onclick="autoSelect(${gi})" class="text-xs text-brand-600 hover:text-brand-700 font-medium">自动选择</button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            ${group.images.map((img, ii) => {
+              const isSelected = selectedPaths.has(img.path);
+              const sizeKB = (img.size / 1024).toFixed(1);
+              return `
+                <div class="relative group cursor-pointer" onclick="toggleSelect('${escJs(img.path)}')">
+                  <div class="aspect-square rounded-lg overflow-hidden bg-gray-100 border-2 transition-colors ${isSelected ? 'border-red-500' : 'border-transparent hover:border-gray-300'}">
+                    <img src="/downloads/${img.path}" class="w-full h-full object-cover" loading="lazy">
+                  </div>
+                  <div class="absolute top-1.5 right-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-red-500 border-red-500' : 'bg-white/80 border-gray-300 group-hover:border-gray-400'}">
+                    ${isSelected ? '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+                  </div>
+                  <div class="mt-1 text-xs text-gray-400 truncate">${sizeKB} KB · ${img.width}x${img.height}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    updateDeleteBtn();
+  }
+
+  function toggleSelect(path) {
+    if (selectedPaths.has(path)) {
+      selectedPaths.delete(path);
+    } else {
+      selectedPaths.add(path);
+    }
+    renderGroups();
+  }
+
+  function autoSelect(groupIndex) {
+    const group = groups[groupIndex];
+    if (!group || group.images.length < 2) return;
+
+    // Keep the largest file, select the rest for deletion
+    const sorted = [...group.images].sort((a, b) => b.size - a.size);
+    for (let i = 1; i < sorted.length; i++) {
+      selectedPaths.add(sorted[i].path);
+    }
+    // Make sure the largest is not selected
+    selectedPaths.delete(sorted[0].path);
+    renderGroups();
+  }
+
+  function updateDeleteBtn() {
+    const btn = document.getElementById('deleteBtn');
+    const count = document.getElementById('selectedCount');
+    count.textContent = selectedPaths.size;
+    btn.classList.toggle('hidden', selectedPaths.size === 0);
+  }
+
+  let confirmResolve = null;
+
+  function showConfirm(msg) {
+    return new Promise(resolve => {
+      document.getElementById('confirmMsg').textContent = msg;
+      document.getElementById('confirmOverlay').classList.remove('hidden');
+      document.getElementById('confirmOverlay').classList.add('flex');
+      confirmResolve = resolve;
+    });
+  }
+
+  function closeConfirm(result) {
+    document.getElementById('confirmOverlay').classList.add('hidden');
+    document.getElementById('confirmOverlay').classList.remove('flex');
+    if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+  }
+
+  async function deleteSelected() {
+    const paths = [...selectedPaths];
+    if (paths.length === 0) return;
+
+    // Check that no group would be left with 0 images
+    for (const group of groups) {
+      const groupPaths = group.images.map(i => i.path);
+      const selectedInGroup = groupPaths.filter(p => selectedPaths.has(p));
+      if (selectedInGroup.length >= groupPaths.length) {
+        alert(`第 ${groups.indexOf(group) + 1} 组至少需要保留一张图片`);
+        return;
+      }
+    }
+
+    const ok = await showConfirm(`确认删除 ${paths.length} 张重复图片？`);
+    if (!ok) return;
+
+    const res = await fetch('/api/dedup/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      // Remove deleted paths from groups and re-render
+      for (const group of groups) {
+        group.images = group.images.filter(i => !selectedPaths.has(i.path));
+      }
+      groups = groups.filter(g => g.images.length > 1);
+      selectedPaths.clear();
+      renderGroups();
+      document.getElementById('status').textContent = `已删除 ${data.deleted} 张图片`;
+
+      if (groups.length === 0) {
+        document.getElementById('results').classList.add('hidden');
+        document.getElementById('status').textContent += '，没有更多重复图片';
+      }
+    }
+  }
+
+  function escJs(text) {
+    return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+</script>
+</body>
+</html>

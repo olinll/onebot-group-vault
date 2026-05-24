@@ -8,6 +8,7 @@ export interface Config {
   wsUrl: string;
   groupId: number;
   prod: boolean;
+  silent?: boolean;
 }
 
 // ── Messages ──────────────────────────────────────────────

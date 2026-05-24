@@ -34,6 +34,7 @@
         <button id="navGallery" onclick="switchView('gallery')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors bg-white text-gray-900 shadow-sm">画廊</button>
         <button id="navMessages" onclick="switchView('messages')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-gray-500 hover:text-gray-700">消息</button>
         <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
+        <a href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">去重</a>
       </nav>
     </div>
   </header>
@@ -46,6 +47,12 @@
       </select>
       <select id="tagFilter" onchange="loadData()" class="text-xs sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
         <option value="">全部标签</option>
+      </select>
+      <select id="typeFilter" onchange="loadData()" class="hidden text-xs sm:text-sm border border-gray-300 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+        <option value="">全部类型</option>
+        <option value="text">纯文字</option>
+        <option value="image">图片</option>
+        <option value="file">文件</option>
       </select>
       <button id="btnBatchMode" onclick="toggleBatchMode()" class="hidden text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
         <span id="batchModeLabel">多选</span>
@@ -140,9 +147,10 @@
   async function loadData() {
     const date = document.getElementById('dateFilter').value;
     const tag = document.getElementById('tagFilter').value;
+    const type = document.getElementById('typeFilter').value;
     currentPage = 1;
     if (currentView === 'gallery') await loadGallery(date, 1, tag);
-    else await loadMessages(date, 1, tag);
+    else await loadMessages(date, 1, tag, type);
   }
 
   async function loadGallery(date, page, tag) {
@@ -191,11 +199,12 @@
     renderPagination(data.total, data.limit, page, (p) => loadGallery(date, p, tag));
   }
 
-  async function loadMessages(date, page, tag) {
+  async function loadMessages(date, page, tag, type) {
     page = page || 1;
     const params = new URLSearchParams({ page, limit: 30 });
     if (date) params.set('date', date);
     if (tag) params.set('tag', tag);
+    if (type) params.set('type', type);
     const res = await fetch(`/api/messages?${params}`);
     const data = await res.json();
 
@@ -246,7 +255,7 @@
     }
 
     document.getElementById('stats').textContent = `${data.total} 条消息`;
-    renderPagination(data.total, data.limit, page, (p) => loadMessages(date, p, tag));
+    renderPagination(data.total, data.limit, page, (p) => loadMessages(date, p, tag, type));
     applyAutoCollapse();
   }
 
@@ -282,6 +291,7 @@
     document.getElementById('navMessages').className = `px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-xs sm:text-sm ${view === 'messages' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`;
     document.getElementById('galleryView').classList.toggle('hidden', view !== 'gallery');
     document.getElementById('messagesView').classList.toggle('hidden', view !== 'messages');
+    document.getElementById('typeFilter').classList.toggle('hidden', view !== 'messages');
     loadData();
   }
 
