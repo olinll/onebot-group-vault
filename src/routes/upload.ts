@@ -32,8 +32,8 @@ const upload = multer({
 
 const router = Router();
 
-router.post('/', upload.array('files', 20), (req, res) => {
-  const files = req.files as Express.Multer.File[];
+router.post('/', upload.any(), (req, res) => {
+  const files = (Array.isArray(req.files) ? req.files : []) as Express.Multer.File[];
   if (!files || files.length === 0) {
     return res.status(400).json({ error: 'No files uploaded' });
   }
