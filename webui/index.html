@@ -23,6 +23,14 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
     .msg-body-collapse { max-height: 120px; overflow: hidden; position: relative; }
     .msg-body-collapse::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, #fff); pointer-events: none; }
+    .masonry { columns: 3; column-gap: 0.5rem; }
+    .masonry > * { break-inside: avoid; margin-bottom: 0.5rem; }
+    @media (min-width: 640px) { .masonry { columns: 4; column-gap: 1rem; } .masonry > * { margin-bottom: 1rem; } }
+    @media (min-width: 768px) { .masonry { columns: 5; } }
+    @media (min-width: 1024px) { .masonry { columns: 6; } }
+    .masonry-msg { columns: 2; column-gap: 0.75rem; }
+    .masonry-msg > * { break-inside: avoid; margin-bottom: 0.75rem; }
+    @media (min-width: 768px) { .masonry-msg { columns: 3; column-gap: 1rem; } .masonry-msg > * { margin-bottom: 1rem; } }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
@@ -30,7 +38,7 @@
   <!-- Header -->
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-14 flex items-center justify-between gap-2">
-      <a href="/" class="flex items-center gap-1.5 sm:gap-2 shrink-0 hover:opacity-80 transition-opacity">
+      <a href="/" onclick="localStorage.setItem('qv-view','gallery')" class="flex items-center gap-1.5 sm:gap-2 shrink-0 hover:opacity-80 transition-opacity">
         <img src="/favicon.svg" class="w-6 h-6 sm:w-7 sm:h-7" alt="">
         <h1 class="text-base sm:text-lg font-semibold text-gray-900">群宝箱</h1>
       </a>
@@ -71,8 +79,11 @@
 
   <!-- Main -->
   <main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
-    <div id="galleryView" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4"></div>
-    <div id="messagesView" class="hidden flex flex-col gap-2 sm:gap-3"></div>
+    <div id="galleryView" class="masonry"></div>
+    <div id="messagesView" class="hidden masonry-msg"></div>
+    <div id="gallerySentinel" class="hidden py-8 text-center text-sm text-gray-400">
+      <span id="galleryLoadingText">加载中...</span>
+    </div>
     <div id="pagination" class="flex justify-center gap-1.5 sm:gap-2 mt-6 sm:mt-8"></div>
     <div id="empty" class="hidden text-center py-16 sm:py-20 text-gray-400 text-sm">暂无数据</div>
   </main>
@@ -117,6 +128,8 @@
   let lightboxIndex = 0;
   let batchMode = false;
   let selectedPaths = new Set();
+  let galleryLoading = false;
+  let galleryHasMore = true;
 
   function tagClass(i) { return 'tag-dot-' + (i % 5); }
 
@@ -157,79 +170,87 @@
     const tag = document.getElementById('tagFilter').value;
     const type = document.getElementById('typeFilter').value;
     currentPage = 1;
-    if (currentView === 'gallery') await loadGallery(date, 1, tag);
-    else await loadMessages(date, 1, tag, type);
+    if (currentView === 'gallery') {
+      galleryHasMore = true;
+      await loadGallery(date, 1, tag, false);
+    } else {
+      await loadMessages(date, 1, tag, type);
+    }
   }
 
-  async function loadGallery(date, page, tag) {
+  function renderGalleryCard(img, i) {
+    return `
+      <div class="group relative bg-white rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer fade-in ${selectedPaths.has(img.localPath) ? 'ring-2 ring-brand-500' : ''}"
+           onclick="${batchMode ? `toggleSelect('${escJs(img.localPath)}')` : `openLightbox(${i})`}"
+           data-path="${esc(img.localPath)}">
+        ${batchMode ? `
+          <div class="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 ${selectedPaths.has(img.localPath) ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300'} flex items-center justify-center">
+            ${selectedPaths.has(img.localPath) ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+          </div>` : ''}
+        <button class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                onclick="event.stopPropagation();deleteImage(${i})" title="删除">
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <img src="${img.url}" alt="" loading="lazy" class="w-full">
+        <div class="p-1.5 sm:p-2.5">
+          <div class="text-[10px] sm:text-xs font-medium text-gray-900 truncate">${esc(img.nickname || String(img.user_id))}</div>
+          ${img.groupName ? `<div class="text-[9px] sm:text-[10px] text-brand-600 bg-brand-50 inline-block px-1 py-0.5 rounded truncate">${esc(img.groupName)}</div>` : ''}
+          <div class="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">${new Date(img.time * 1000).toLocaleString()}</div>
+          ${img.tags && img.tags.length ? `<div class="mt-1 flex gap-0.5 sm:gap-1 flex-wrap">${renderTags(img.tags)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadGallery(date, page, tag, append) {
+    if (galleryLoading) return;
+    galleryLoading = true;
     page = page || 1;
-    const params = new URLSearchParams({ page, limit: 60 });
+    const params = new URLSearchParams({ page: String(page), limit: '60' });
     if (date) params.set('date', date);
     if (tag) params.set('tag', tag);
-    const res = await fetch(`/api/images?${params}`);
-    const data = await res.json();
-    imageList = data.items;
 
     const container = document.getElementById('galleryView');
     const empty = document.getElementById('empty');
     const batchBtn = document.getElementById('btnBatchMode');
 
-    if (data.items.length === 0) {
-      container.innerHTML = '';
-      empty.classList.remove('hidden');
-      batchBtn.classList.add('hidden');
-    } else {
-      empty.classList.add('hidden');
-      batchBtn.classList.remove('hidden');
-      container.innerHTML = data.items.map((img, i) => `
-        <div class="group relative bg-white rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer fade-in ${selectedPaths.has(img.localPath) ? 'ring-2 ring-brand-500' : ''}"
-             onclick="${batchMode ? `toggleSelect('${escJs(img.localPath)}')` : `openLightbox(${i})`}"
-             data-path="${esc(img.localPath)}">
-          ${batchMode ? `
-            <div class="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 ${selectedPaths.has(img.localPath) ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300'} flex items-center justify-center">
-              ${selectedPaths.has(img.localPath) ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
-            </div>` : ''}
-          <button class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                  onclick="event.stopPropagation();deleteImage(${i})" title="删除">
-            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-          <img src="${img.url}" alt="" loading="lazy" class="w-full h-32 sm:h-48 object-cover">
-          <div class="p-1.5 sm:p-2.5">
-            <div class="text-[10px] sm:text-xs font-medium text-gray-900 truncate">${esc(img.nickname || String(img.user_id))}</div>
-            ${img.groupName ? `<div class="text-[9px] sm:text-[10px] text-gray-400 truncate">${esc(img.groupName)}</div>` : ''}
-            <div class="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">${new Date(img.time * 1000).toLocaleString()}</div>
-            ${img.tags && img.tags.length ? `<div class="mt-1 flex gap-0.5 sm:gap-1 flex-wrap">${renderTags(img.tags)}</div>` : ''}
-          </div>
-        </div>
-      `).join('');
-    }
+    try {
+      const res = await fetch('/api/images?' + params.toString());
+      const data = await res.json();
 
-    document.getElementById('stats').textContent = `${data.total} 张图片`;
-    renderPagination(data.total, data.limit, page, (p) => loadGallery(date, p, tag));
+      if (append) {
+        const startIdx = imageList.length;
+        imageList = imageList.concat(data.items);
+        const html = data.items.map((img, i) => renderGalleryCard(img, startIdx + i)).join('');
+        container.insertAdjacentHTML('beforeend', html);
+      } else {
+        imageList = data.items;
+        if (data.items.length === 0) {
+          container.innerHTML = '';
+          empty.classList.remove('hidden');
+          batchBtn.classList.add('hidden');
+        } else {
+          empty.classList.add('hidden');
+          batchBtn.classList.remove('hidden');
+          container.innerHTML = data.items.map((img, i) => renderGalleryCard(img, i)).join('');
+        }
+      }
+
+      galleryHasMore = data.items.length >= 60;
+      document.getElementById('stats').textContent = imageList.length + ' / ' + data.total + ' 张图片';
+      showGalleryLoading(galleryHasMore);
+    } catch (err) {
+      console.error('[loadGallery] Error:', err);
+    }
+    galleryLoading = false;
   }
 
-  function renderMedia(seg) {
-    if (seg.type === 'image' && seg.data.localPath) {
-      return `<img src="/downloads/${seg.data.localPath}" loading="lazy" class="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg">`;
-    }
-    if (seg.type === 'video' && seg.data.localPath) {
-      return `<video src="/downloads/${seg.data.localPath}" controls preload="metadata" class="w-28 sm:w-36 rounded-lg"></video>`;
-    }
-    return '';
-  }
-
-  function renderBody(seg) {
-    switch (seg.type) {
-      case 'text': return `<p class="text-xs sm:text-sm text-gray-700">${esc(seg.data.text || '')}</p>`;
-      case 'image': return seg.data.localPath ? '' : `<p class="text-xs text-gray-400">[图片]</p>`;
-      case 'video': return seg.data.localPath ? '' : `<p class="text-xs text-gray-400">[视频]</p>`;
-      case 'file':
-        if (seg.data.localPath) return `<a href="/downloads/${seg.data.localPath}" target="_blank" class="text-xs text-brand-600">📎 ${esc(seg.data.file || '文件')}</a>`;
-        return `<p class="text-xs text-gray-400">[文件]</p>`;
-      case 'forward': return `<p class="text-xs text-amber-700">转发消息</p>`;
-      case 'at': return `<span class="text-xs text-brand-600">@${esc(seg.data.name || seg.data.qq || '')}</span>`;
-      default: return `<p class="text-xs text-gray-400">[${esc(seg.type)}]</p>`;
-    }
+  function loadMoreGallery() {
+    if (!galleryHasMore || galleryLoading || currentView !== 'gallery') return;
+    const date = document.getElementById('dateFilter').value;
+    const tag = document.getElementById('tagFilter').value;
+    currentPage++;
+    loadGallery(date, currentPage, tag, true);
   }
 
   async function loadMessages(date, page, tag, type) {
@@ -241,7 +262,6 @@
       if (type) params.set('type', type);
       const res = await fetch('/api/messages?' + params.toString());
       const data = await res.json();
-      console.log('[loadMessages]', data.total, 'items:', data.items?.length);
 
       const container = document.getElementById('messagesView');
       const empty = document.getElementById('empty');
@@ -253,19 +273,98 @@
         empty.classList.add('hidden');
         let html = '';
         for (const msg of data.items) {
-          const media = (msg.segments || []).map(renderMedia).filter(Boolean).join('');
-          const body = (msg.segments || []).map(renderBody).filter(Boolean).join('');
           const name = msg.nickname || String(msg.user_id || '');
           const time = new Date((msg.time || 0) * 1000).toLocaleString();
-          const group = msg.groupName ? '<span class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px] sm:text-xs">' + esc(msg.groupName) + '</span>' : '';
+          const group = msg.groupName ? '<span class="px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded text-[10px] sm:text-xs font-medium">' + esc(msg.groupName) + '</span>' : '';
+          const filePaths = (msg.segments || []).filter(s => s.data && s.data.localPath).map(s => s.data.localPath);
+
+          // Collect media segments
+          const imgSegs = (msg.segments || []).filter(s => s.type === 'image' && s.data.localPath);
+          const vidSegs = (msg.segments || []).filter(s => s.type === 'video' && s.data.localPath);
+          const fileSegs = (msg.segments || []).filter(s => s.type === 'file' && s.data.localPath);
+          const isSingleImage = imgSegs.length === 1 && vidSegs.length === 0 && fileSegs.length === 0;
+          const isSingleVideo = vidSegs.length === 1 && imgSegs.length === 0 && fileSegs.length === 0;
+          const isSingleFile = fileSegs.length === 1 && imgSegs.length === 0 && vidSegs.length === 0;
+
+          let mediaHtml = '';
+
+          if (isSingleImage) {
+            // Single image: full-width display
+            const s = imgSegs[0];
+            const tags = s.data.tags || [];
+            const tagHtml = tags.length ? '<div class="flex gap-1 mt-1.5 flex-wrap">' + tags.map(t => '<span class="px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded text-xs">' + esc(t) + '</span>').join('') + '</div>' : '';
+            mediaHtml = '<div class="mt-2">'
+              + '<img src="/downloads/' + s.data.localPath + '" onclick="openLightboxUrl(\'/downloads/' + s.data.localPath + '\')" loading="lazy" class="w-full max-h-[400px] object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity">'
+              + tagHtml
+              + '</div>';
+          } else if (isSingleVideo) {
+            // Single video: full-width player
+            const s = vidSegs[0];
+            mediaHtml = '<div class="mt-2">'
+              + '<video src="/downloads/' + s.data.localPath + '" controls preload="metadata" class="w-full max-h-[400px] rounded-lg"></video>'
+              + '</div>';
+          } else if (isSingleFile) {
+            // Single file: nice file card
+            const s = fileSegs[0];
+            const fname = esc(s.data.file || '文件');
+            const fsize = s.data.size ? formatFileSize(s.data.size) : '';
+            mediaHtml = '<div class="mt-2">'
+              + '<a href="/downloads/' + s.data.localPath + '" target="_blank" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group">'
+              + '<div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">'
+              + '<svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
+              + '</div>'
+              + '<div class="flex-1 min-w-0">'
+              + '<div class="text-sm font-medium text-gray-900 truncate">' + fname + '</div>'
+              + (fsize ? '<div class="text-xs text-gray-400">' + fsize + '</div>' : '')
+              + '</div>'
+              + '<svg class="w-5 h-5 text-gray-400 group-hover:text-brand-600 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>'
+              + '</a>'
+              + '</div>';
+          } else if (imgSegs.length || vidSegs.length) {
+            // Multiple media: thumbnail grid
+            mediaHtml = '<div class="flex gap-1.5 sm:gap-2 flex-wrap mt-2">';
+            for (const s of imgSegs) {
+              const tags = s.data.tags || [];
+              const tagHtml = tags.length ? '<div class="flex gap-0.5 mt-0.5">' + tags.map(t => '<span class="px-1 py-0.5 bg-brand-50 text-brand-600 rounded text-[9px]">' + esc(t) + '</span>').join('') + '</div>' : '';
+              mediaHtml += '<div><img src="/downloads/' + s.data.localPath + '" onclick="openLightboxUrl(\'/downloads/' + s.data.localPath + '\')" loading="lazy" class="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity">' + tagHtml + '</div>';
+            }
+            for (const s of vidSegs) {
+              mediaHtml += '<video src="/downloads/' + s.data.localPath + '" controls preload="metadata" class="w-32 sm:w-40 rounded-lg"></video>';
+            }
+            mediaHtml += '</div>';
+          }
+
+          // Body text (non-file text segments)
+          let bodyHtml = '';
+          for (const seg of (msg.segments || [])) {
+            if (seg.type === 'text') bodyHtml += '<p class="text-xs sm:text-sm text-gray-700">' + esc(seg.data.text || '') + '</p>';
+            else if (seg.type === 'file' && !seg.data.localPath) bodyHtml += '<p class="text-xs text-gray-400">[文件]</p>';
+            else if (seg.type === 'forward') bodyHtml += '<p class="text-xs text-amber-700">转发消息</p>';
+            else if (seg.type === 'at') bodyHtml += '<span class="text-xs text-brand-600">@' + esc(seg.data.name || seg.data.qq || '') + '</span>';
+          }
+
+          // For multi-file messages without single-file card, show file links in body
+          if (!isSingleFile) {
+            for (const seg of fileSegs) {
+              const fname = esc(seg.data.file || '文件');
+              const fsize = seg.data.size ? ' (' + formatFileSize(seg.data.size) + ')' : '';
+              bodyHtml += '<a href="/downloads/' + seg.data.localPath + '" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700">'
+                + '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>'
+                + fname + fsize + '</a>';
+            }
+          }
+
+          const delBtn = filePaths.length ? '<button onclick="deleteMsgFiles(this)" data-paths=\'' + esc(JSON.stringify(filePaths)) + '\' class="text-[10px] sm:text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-1.5 sm:px-2 py-0.5 rounded transition-colors shrink-0">删除</button>' : '';
+
           html += '<div class="bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in">'
-            + '<div class="flex items-center gap-2 sm:gap-3 mb-2">'
+            + '<div class="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">'
             + '<span class="text-xs sm:text-sm font-medium text-gray-900 truncate">' + esc(name) + '</span>'
             + group
-            + '<span class="text-[10px] sm:text-xs text-gray-400 ml-auto">' + esc(time) + '</span>'
+            + '<span class="text-[10px] sm:text-xs text-gray-400 ml-auto shrink-0">' + esc(time) + '</span>'
+            + delBtn
             + '</div>'
-            + (media ? '<div class="flex gap-2 flex-wrap mb-1">' + media + '</div>' : '')
-            + (body ? '<div class="pl-0 sm:pl-0">' + body + '</div>' : '')
+            + mediaHtml
+            + (bodyHtml ? '<div class="mt-1">' + bodyHtml + '</div>' : '')
             + '</div>';
         }
         container.innerHTML = html;
@@ -313,6 +412,8 @@
     document.getElementById('galleryView').classList.toggle('hidden', view !== 'gallery');
     document.getElementById('messagesView').classList.toggle('hidden', view !== 'messages');
     document.getElementById('typeFilter').classList.toggle('hidden', view !== 'messages');
+    document.getElementById('pagination').classList.toggle('hidden', view !== 'messages');
+    if (view !== 'gallery') showGalleryLoading(false);
     loadData();
   }
 
@@ -328,8 +429,14 @@
 
   function openLightboxUrl(url) {
     const idx = imageList.findIndex(img => img.url === url || `/downloads/${img.localPath}` === url);
-    if (idx >= 0) lightboxIndex = idx;
-    updateLightbox();
+    if (idx >= 0) {
+      lightboxIndex = idx;
+      updateLightbox();
+    } else {
+      // Image not in gallery list — show directly
+      document.getElementById('lightboxImg').src = url;
+      document.getElementById('lbTags').innerHTML = '<span class="text-white/40 text-xs sm:text-sm">暂无标签</span>';
+    }
     document.getElementById('lightbox').classList.remove('hidden');
     document.getElementById('lightbox').classList.add('flex');
     document.body.style.overflow = 'hidden';
@@ -502,6 +609,12 @@
 
   function esc(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
   function escJs(text) { return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(1) + ' GB';
+  }
 
   async function deleteImage(index) {
     const img = imageList[index];
@@ -528,6 +641,21 @@
     if (view === 'messages') switchView('messages');
     else loadData();
   });
+
+  // Infinite scroll for gallery
+  const sentinel = document.getElementById('gallerySentinel');
+  const scrollObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && currentView === 'gallery') {
+      loadMoreGallery();
+    }
+  }, { rootMargin: '400px' });
+  scrollObserver.observe(sentinel);
+
+  function showGalleryLoading(show) {
+    sentinel.classList.toggle('hidden', !show);
+    document.getElementById('galleryLoadingText').textContent = show
+      ? (galleryLoading ? '加载中...' : '滚动加载更多') : '';
+  }
 
   // CSS 确认弹窗
   function showConfirm(message) {
