@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>group-vault</title>
+  <title>群宝箱</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -29,12 +30,18 @@
   <!-- Header -->
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-14 flex items-center justify-between gap-2">
-      <h1 class="text-base sm:text-lg font-semibold text-gray-900 shrink-0">group-vault</h1>
-      <nav class="flex gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 text-xs sm:text-sm">
+      <a href="/" class="flex items-center gap-1.5 sm:gap-2 shrink-0 hover:opacity-80 transition-opacity">
+        <img src="/favicon.svg" class="w-6 h-6 sm:w-7 sm:h-7" alt="">
+        <h1 class="text-base sm:text-lg font-semibold text-gray-900">群宝箱</h1>
+      </a>
+      <nav class="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 text-xs sm:text-sm">
         <button id="navGallery" onclick="switchView('gallery')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors bg-white text-gray-900 shadow-sm">画廊</button>
         <button id="navMessages" onclick="switchView('messages')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-gray-500 hover:text-gray-700">消息</button>
         <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
         <a href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">去重</a>
+        <button onclick="loadData()" class="ml-0.5 p-1 sm:p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors" title="刷新">
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
       </nav>
     </div>
   </header>
@@ -52,6 +59,7 @@
         <option value="">全部类型</option>
         <option value="text">纯文字</option>
         <option value="image">图片</option>
+        <option value="video">视频</option>
         <option value="file">文件</option>
       </select>
       <button id="btnBatchMode" onclick="toggleBatchMode()" class="hidden text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
@@ -188,6 +196,7 @@
           <img src="${img.url}" alt="" loading="lazy" class="w-full h-32 sm:h-48 object-cover">
           <div class="p-1.5 sm:p-2.5">
             <div class="text-[10px] sm:text-xs font-medium text-gray-900 truncate">${esc(img.nickname || String(img.user_id))}</div>
+            ${img.groupName ? `<div class="text-[9px] sm:text-[10px] text-gray-400 truncate">${esc(img.groupName)}</div>` : ''}
             <div class="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">${new Date(img.time * 1000).toLocaleString()}</div>
             ${img.tags && img.tags.length ? `<div class="mt-1 flex gap-0.5 sm:gap-1 flex-wrap">${renderTags(img.tags)}</div>` : ''}
           </div>
@@ -199,64 +208,75 @@
     renderPagination(data.total, data.limit, page, (p) => loadGallery(date, p, tag));
   }
 
-  async function loadMessages(date, page, tag, type) {
-    page = page || 1;
-    const params = new URLSearchParams({ page, limit: 30 });
-    if (date) params.set('date', date);
-    if (tag) params.set('tag', tag);
-    if (type) params.set('type', type);
-    const res = await fetch(`/api/messages?${params}`);
-    const data = await res.json();
-
-    const container = document.getElementById('messagesView');
-    const empty = document.getElementById('empty');
-
-    if (data.items.length === 0) {
-      container.innerHTML = '';
-      empty.classList.remove('hidden');
-    } else {
-      empty.classList.add('hidden');
-      container.innerHTML = data.items.map(msg => {
-        const imgSegs = msg.segments.filter(s => s.type === 'image' && s.data.localPath);
-        const imgHtml = imgSegs.length
-          ? `<div class="flex gap-1.5 sm:gap-2 flex-wrap mt-2">${imgSegs.map(s =>
-              `<img src="/downloads/${s.data.localPath}" onclick="openLightboxUrl('/downloads/${s.data.localPath}')" loading="lazy" class="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity">`
-            ).join('')}</div>`
-          : '';
-
-        const body = msg.segments.filter(s => s.type !== 'image' || !s.data.localPath).map(seg => {
-          switch (seg.type) {
-            case 'text': return `<p class="text-xs sm:text-sm text-gray-700 leading-relaxed">${esc(seg.data.text || '')}</p>`;
-            case 'image': return `<p class="text-xs sm:text-sm text-gray-400 italic">[图片: ${esc(seg.data.file || '')}]</p>`;
-            case 'file':
-              if (seg.data.localPath) return `<a href="/downloads/${seg.data.localPath}" target="_blank" class="inline-flex items-center gap-1 text-xs sm:text-sm text-brand-600 hover:text-brand-700 mt-1">📎 ${esc(seg.data.file || '文件')}</a>`;
-              return `<p class="text-xs sm:text-sm text-gray-400">[文件: ${esc(seg.data.file || '')}]</p>`;
-            case 'forward': return `<div class="bg-amber-50 border-l-3 border-amber-400 px-2 sm:px-3 py-1.5 sm:py-2 rounded text-xs sm:text-sm text-amber-800 mt-1">转发消息 ID: ${esc(seg.data.id || '')}</div>`;
-            case 'at': return `<span class="text-brand-600 text-xs sm:text-sm">@${esc(seg.data.name || seg.data.qq)}</span>`;
-            default: return `<p class="text-xs sm:text-sm text-gray-400">[${esc(seg.type)}]</p>`;
-          }
-        }).join('');
-
-        const filePaths = msg.segments.filter(s => s.data?.localPath).map(s => s.data.localPath);
-
-        return `
-          <div class="bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in">
-            <div class="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
-              <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs sm:text-sm font-medium shrink-0">${(msg.nickname || '?')[0]}</div>
-              <span class="text-xs sm:text-sm font-medium text-gray-900 truncate">${esc(msg.nickname || String(msg.user_id))}</span>
-              <span class="text-[10px] sm:text-xs text-gray-400 ml-auto shrink-0">${new Date(msg.time * 1000).toLocaleString()}</span>
-              ${filePaths.length ? `<button onclick="deleteMsgFiles(this)" data-paths='${esc(JSON.stringify(filePaths))}' class="text-[10px] sm:text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-1.5 sm:px-2 py-0.5 rounded transition-colors shrink-0">删除</button>` : ''}
-            </div>
-            <div class="pl-9 sm:pl-11 msg-body-auto">${imgHtml}${body}</div>
-            <button class="hidden mt-1 ml-9 sm:ml-11 text-[10px] sm:text-xs text-brand-600 hover:text-brand-700" onclick="toggleCollapse(this)">展开</button>
-          </div>
-        `;
-      }).join('');
+  function renderMedia(seg) {
+    if (seg.type === 'image' && seg.data.localPath) {
+      return `<img src="/downloads/${seg.data.localPath}" loading="lazy" class="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg">`;
     }
+    if (seg.type === 'video' && seg.data.localPath) {
+      return `<video src="/downloads/${seg.data.localPath}" controls preload="metadata" class="w-28 sm:w-36 rounded-lg"></video>`;
+    }
+    return '';
+  }
 
-    document.getElementById('stats').textContent = `${data.total} 条消息`;
-    renderPagination(data.total, data.limit, page, (p) => loadMessages(date, p, tag, type));
-    applyAutoCollapse();
+  function renderBody(seg) {
+    switch (seg.type) {
+      case 'text': return `<p class="text-xs sm:text-sm text-gray-700">${esc(seg.data.text || '')}</p>`;
+      case 'image': return seg.data.localPath ? '' : `<p class="text-xs text-gray-400">[图片]</p>`;
+      case 'video': return seg.data.localPath ? '' : `<p class="text-xs text-gray-400">[视频]</p>`;
+      case 'file':
+        if (seg.data.localPath) return `<a href="/downloads/${seg.data.localPath}" target="_blank" class="text-xs text-brand-600">📎 ${esc(seg.data.file || '文件')}</a>`;
+        return `<p class="text-xs text-gray-400">[文件]</p>`;
+      case 'forward': return `<p class="text-xs text-amber-700">转发消息</p>`;
+      case 'at': return `<span class="text-xs text-brand-600">@${esc(seg.data.name || seg.data.qq || '')}</span>`;
+      default: return `<p class="text-xs text-gray-400">[${esc(seg.type)}]</p>`;
+    }
+  }
+
+  async function loadMessages(date, page, tag, type) {
+    try {
+      page = page || 1;
+      const params = new URLSearchParams({ page: String(page), limit: '30' });
+      if (date) params.set('date', date);
+      if (tag) params.set('tag', tag);
+      if (type) params.set('type', type);
+      const res = await fetch('/api/messages?' + params.toString());
+      const data = await res.json();
+      console.log('[loadMessages]', data.total, 'items:', data.items?.length);
+
+      const container = document.getElementById('messagesView');
+      const empty = document.getElementById('empty');
+
+      if (!data.items || data.items.length === 0) {
+        container.innerHTML = '';
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        let html = '';
+        for (const msg of data.items) {
+          const media = (msg.segments || []).map(renderMedia).filter(Boolean).join('');
+          const body = (msg.segments || []).map(renderBody).filter(Boolean).join('');
+          const name = msg.nickname || String(msg.user_id || '');
+          const time = new Date((msg.time || 0) * 1000).toLocaleString();
+          const group = msg.groupName ? '<span class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px] sm:text-xs">' + esc(msg.groupName) + '</span>' : '';
+          html += '<div class="bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in">'
+            + '<div class="flex items-center gap-2 sm:gap-3 mb-2">'
+            + '<span class="text-xs sm:text-sm font-medium text-gray-900 truncate">' + esc(name) + '</span>'
+            + group
+            + '<span class="text-[10px] sm:text-xs text-gray-400 ml-auto">' + esc(time) + '</span>'
+            + '</div>'
+            + (media ? '<div class="flex gap-2 flex-wrap mb-1">' + media + '</div>' : '')
+            + (body ? '<div class="pl-0 sm:pl-0">' + body + '</div>' : '')
+            + '</div>';
+        }
+        container.innerHTML = html;
+      }
+
+      document.getElementById('stats').textContent = (data.total || 0) + ' 条消息';
+      renderPagination(data.total || 0, data.limit || 30, page, function(p) { loadMessages(date, p, tag, type); });
+    } catch (err) {
+      console.error('[loadMessages] Error:', err);
+      document.getElementById('stats').textContent = '加载失败';
+    }
   }
 
   function renderPagination(total, limit, current, callback) {
@@ -286,6 +306,7 @@
 
   function switchView(view) {
     currentView = view;
+    localStorage.setItem('qv-view', view);
     exitBatchMode();
     document.getElementById('navGallery').className = `px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-xs sm:text-sm ${view === 'gallery' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`;
     document.getElementById('navMessages').className = `px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-xs sm:text-sm ${view === 'messages' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`;
@@ -500,7 +521,13 @@
     loadData();
   }
 
-  Promise.all([loadDates(), loadTagOptions()]).then(() => loadData());
+  Promise.all([loadDates(), loadTagOptions()]).then(() => {
+    const urlView = new URLSearchParams(location.search).get('view');
+    const saved = localStorage.getItem('qv-view');
+    const view = urlView || saved || 'gallery';
+    if (view === 'messages') switchView('messages');
+    else loadData();
+  });
 
   // CSS 确认弹窗
   function showConfirm(message) {
