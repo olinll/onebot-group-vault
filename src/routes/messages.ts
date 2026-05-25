@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { loadMessages, loadTags, getTagsForPath } from '../store.js';
+import { existsSync, mkdirSync, renameSync } from 'fs';
+import { join, dirname, extname, basename } from 'path';
+import { loadMessages, saveMessages, loadTags, saveTags, removePathFromTags, getTagsForPath } from '../store.js';
+
+const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
+const RECYCLE_DIR = join(__dirname, '..', '..', 'storage', 'recycle');
 
 const router = Router();
 
@@ -91,6 +96,43 @@ router.get('/dates', (_req, res) => {
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([date, count]) => ({ date, count }));
   res.json(dates);
+});
+
+router.delete('/messages/:messageId', (req, res) => {
+  const messageId = parseInt(req.params.messageId);
+  const messages = loadMessages();
+  const target = messages.find((m) => m.message_id === messageId);
+  if (!target) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+
+  const tagArr = loadTags();
+  for (const seg of target.segments) {
+    const localPath = seg.data?.localPath;
+    if (!localPath) continue;
+
+    const srcPath = join(DOWNLOADS_DIR, localPath);
+    if (existsSync(srcPath)) {
+      const recyclePath = join(RECYCLE_DIR, localPath);
+      mkdirSync(dirname(recyclePath), { recursive: true });
+      let finalPath = recyclePath;
+      let counter = 1;
+      while (existsSync(finalPath)) {
+        const ext = extname(recyclePath);
+        const base = basename(recyclePath, ext);
+        const dir = dirname(recyclePath);
+        finalPath = join(dir, `${base}_${counter}${ext}`);
+        counter++;
+      }
+      renameSync(srcPath, finalPath);
+    }
+
+    removePathFromTags(tagArr, localPath);
+  }
+
+  saveTags(tagArr);
+  saveMessages(messages.filter((m) => m.message_id !== messageId));
+  res.json({ ok: true });
 });
 
 export default router;

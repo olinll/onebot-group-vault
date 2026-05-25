@@ -259,7 +259,8 @@ export async function processMessage(event: GroupMessageEvent, groupName?: strin
         }
         break;
 
-      case 'forward': segment.data.id = seg.data.id; break;
+      case 'forward':
+        return [];
       case 'at': segment.data.qq = seg.data.qq; segment.data.name = seg.data.name; break;
       case 'face': segment.data.id = seg.data.id; break;
       case 'reply': segment.data.id = seg.data.id; break;
@@ -269,7 +270,8 @@ export async function processMessage(event: GroupMessageEvent, groupName?: strin
     return segment;
   });
 
-  msgRecord.segments = await Promise.all(segmentPromises);
+  const rawSegments = await Promise.all(segmentPromises);
+  msgRecord.segments = rawSegments.flat();
 
   const hasMedia = msgRecord.segments.some((s) =>
     ['image', 'file', 'video', 'forward'].includes(s.type),

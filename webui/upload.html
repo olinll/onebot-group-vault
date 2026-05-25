@@ -11,6 +11,33 @@
       theme: { extend: { colors: { brand: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' } } } }
     }
   </script>
+  <style>
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .upload-done { position: relative; }
+    .upload-done::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.6);
+      border-radius: 0.75rem;
+      pointer-events: none;
+    }
+    .upload-done .done-check {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      width: 2.5rem;
+      height: 2.5rem;
+      background: #2563eb;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
@@ -31,62 +58,60 @@
   </header>
 
   <main class="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
-    <div class="flex flex-col lg:flex-row gap-4 sm:gap-6">
 
-      <!-- Left: Drop Zone + Global Tags -->
-      <div class="lg:w-2/5 shrink-0">
-        <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-2xl p-6 sm:p-10 text-center hover:border-brand-500 hover:bg-brand-50/30 transition-colors cursor-pointer">
-          <svg class="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-          </svg>
-          <p class="text-sm sm:text-base text-gray-600 mb-1">拖拽文件到此处，或 <span class="text-brand-600 font-medium">点击选择</span></p>
-          <p class="text-xs sm:text-sm text-gray-400">支持图片、视频、文件（单个最大 100MB，最多 20 个）</p>
-          <input type="file" id="fileInput" multiple class="hidden">
+    <!-- Drop Zone: full width -->
+    <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-2xl p-6 sm:p-10 text-center hover:border-brand-500 hover:bg-brand-50/30 transition-colors cursor-pointer">
+      <svg class="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <p class="text-sm sm:text-base text-gray-600 mb-1">拖拽文件到此处，或 <span class="text-brand-600 font-medium">点击选择</span></p>
+      <p class="text-xs sm:text-sm text-gray-400">支持图片、视频、文件（单个最大 100MB，最多 20 个）</p>
+      <input type="file" id="fileInput" multiple class="hidden">
+    </div>
+
+    <!-- Actions bar -->
+    <div id="uploadActions" class="hidden mt-4 bg-white rounded-xl shadow-sm p-3 sm:p-4">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div class="flex-1 min-w-0 w-full sm:w-auto">
+          <label class="block text-xs font-medium text-gray-500 mb-1">全局标签 <span class="font-normal">（空格分隔）</span></label>
+          <input id="globalTags" placeholder="例如：猫 表情包 风景" class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
         </div>
-
-        <div class="mt-4">
-          <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">全局标签 <span class="text-gray-400 font-normal">（空格分隔）</span></label>
-          <input id="globalTags" placeholder="例如：猫 表情包 风景" class="w-full text-sm border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
-        </div>
-
-        <!-- Upload Actions -->
-        <div id="uploadActions" class="hidden mt-4 flex items-center gap-3">
-          <button id="uploadBtn" onclick="startUpload()" class="px-5 sm:px-6 py-2 sm:py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        <div class="flex items-center gap-2 sm:mt-5">
+          <button id="uploadBtn" onclick="startUpload()" class="px-5 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             全部上传
           </button>
           <button onclick="clearAll()" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">清空</button>
           <span id="uploadStatus" class="text-xs sm:text-sm text-gray-500"></span>
         </div>
-
-        <!-- Progress -->
-        <div id="progressWrap" class="hidden mt-4">
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs sm:text-sm font-medium text-gray-700">上传中...</span>
-            <span id="progressPct" class="text-xs sm:text-sm text-gray-500">0%</span>
-          </div>
-          <div class="w-full bg-gray-200 rounded-full h-2">
-            <div id="progressBar" class="bg-brand-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-          </div>
+      </div>
+      <!-- Progress -->
+      <div id="progressWrap" class="hidden mt-3">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-medium text-gray-700">上传中...</span>
+          <span id="progressPct" class="text-xs text-gray-500">0%</span>
         </div>
-
-        <!-- Results -->
-        <div id="results" class="hidden mt-4 bg-white rounded-xl shadow-sm p-4">
-          <h3 class="text-sm sm:text-base font-semibold text-gray-900 mb-2">上传完成</h3>
-          <div id="resultsList" class="space-y-2"></div>
-          <div class="mt-3 flex gap-3">
-            <a href="/" class="text-sm text-brand-600 hover:text-brand-700 font-medium">去画廊</a>
-            <button onclick="clearAll();document.getElementById('results').classList.add('hidden')" class="text-sm text-gray-500 hover:text-gray-700">继续上传</button>
-          </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div id="progressBar" class="bg-brand-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
         </div>
       </div>
-
-      <!-- Right: File List -->
-      <div class="flex-1 min-w-0">
-        <div id="fileList" class="space-y-2 sm:space-y-3"></div>
-        <div id="emptyHint" class="text-center py-16 text-gray-400 text-sm">拖拽或点击左侧区域添加文件</div>
-      </div>
-
     </div>
+
+    <!-- Two columns: pending (left) + completed (right) -->
+    <div id="columnsWrap" class="hidden mt-4 flex flex-col lg:flex-row gap-4 sm:gap-6">
+      <!-- Left: Pending files -->
+      <div class="flex-1 min-w-0">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">待上传</h3>
+        <div id="fileList" class="space-y-2 sm:space-y-3"></div>
+      </div>
+      <!-- Right: Results -->
+      <div id="results" class="hidden lg:w-2/5 shrink-0">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">上传完成</h3>
+        <div id="resultsList" class="space-y-2 bg-white rounded-xl shadow-sm p-3 sm:p-4 max-h-[60vh] overflow-y-auto"></div>
+      </div>
+    </div>
+
+    <div id="emptyHint" class="text-center py-16 text-gray-400 text-sm">拖拽或点击上方区域添加文件</div>
+
   </main>
 
 <script>
@@ -95,6 +120,7 @@
   const fileList = document.getElementById('fileList');
   const emptyHint = document.getElementById('emptyHint');
   let selectedFiles = [];
+  let uploadedIndices = new Set();
 
   dropZone.addEventListener('click', () => fileInput.click());
   dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-brand-500', 'bg-brand-50/30'); });
@@ -116,20 +142,25 @@
 
   function removeFile(index) {
     selectedFiles.splice(index, 1);
+    uploadedIndices.clear();
     renderFileList();
   }
 
   function renderFileList() {
     const actions = document.getElementById('uploadActions');
+    const cols = document.getElementById('columnsWrap');
     if (selectedFiles.length === 0) {
       fileList.innerHTML = '';
       actions.classList.add('hidden');
+      cols.classList.add('hidden');
       emptyHint.classList.remove('hidden');
+      uploadedIndices.clear();
       return;
     }
 
     emptyHint.classList.add('hidden');
     actions.classList.remove('hidden');
+    cols.classList.remove('hidden');
     fileList.innerHTML = selectedFiles.map((f, i) => {
       const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(f.name);
       const isVid = /\.(mp4|webm|mov|avi)$/i.test(f.name);
@@ -137,18 +168,22 @@
       const icon = isVid
         ? '<svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
         : '<svg class="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+      const done = uploadedIndices.has(i);
       return `
-        <div class="bg-white rounded-xl shadow-sm p-3 sm:p-4 flex items-center gap-3 sm:gap-4 fade-in">
+        <div class="bg-white rounded-xl shadow-sm p-3 sm:p-4 flex items-center gap-3 sm:gap-4 fade-in ${done ? 'upload-done' : ''}">
           ${isImg ? `<img src="${URL.createObjectURL(f)}" class="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded-lg flex-shrink-0">` :
             `<div class="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">${icon}</div>`}
+          ${done ? '<div class="done-check"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></div>' : ''}
           <div class="flex-1 min-w-0">
             <div class="text-xs sm:text-sm font-medium text-gray-900 truncate">${esc(f.name)}</div>
             <div class="text-xs text-gray-400">${size}</div>
-            <input data-index="${i}" placeholder="标签（可选，空格分隔）" class="mt-1 sm:mt-1.5 w-full text-xs border border-gray-200 rounded-lg px-2 sm:px-2.5 py-1 sm:py-1.5 focus:ring-1 focus:ring-brand-500 focus:border-brand-500 outline-none file-tags">
+            <input data-index="${i}" placeholder="标签（可选，空格分隔）"
+              ${done ? 'disabled' : ''}
+              class="mt-1 sm:mt-1.5 w-full text-xs border border-gray-200 rounded-lg px-2 sm:px-2.5 py-1 sm:py-1.5 outline-none file-tags ${done ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'focus:ring-1 focus:ring-brand-500 focus:border-brand-500'}">
           </div>
-          <button onclick="removeFile(${i})" class="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 p-1">
+          ${done ? '' : `<button onclick="removeFile(${i})" class="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 p-1">
             <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
+          </button>`}
         </div>
       `;
     }).join('');
@@ -156,10 +191,12 @@
 
   function clearAll() {
     selectedFiles = [];
+    uploadedIndices.clear();
     fileInput.value = '';
     renderFileList();
     document.getElementById('results').classList.add('hidden');
     document.getElementById('progressWrap').classList.add('hidden');
+    document.getElementById('uploadStatus').textContent = '';
   }
 
   async function startUpload() {
@@ -235,21 +272,35 @@
     const list = document.getElementById('resultsList');
     results.classList.remove('hidden');
 
+    // Mark all files as uploaded
+    for (let i = 0; i < selectedFiles.length; i++) uploadedIndices.add(i);
+    renderFileList();
+
     list.innerHTML = data.files.map(f => {
       const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(f.filename);
       return `
-        <div class="flex items-center gap-3 py-2">
-          ${isImg ? `<img src="/downloads/${f.localPath}" class="w-10 h-10 object-cover rounded-lg">` :
-            `<div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+        <div class="flex items-center gap-3 py-2 fade-in">
+          ${isImg ? `<img src="/downloads/${f.localPath}" class="w-10 h-10 object-cover rounded-lg flex-shrink-0">` :
+            `<div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             </div>`}
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium text-gray-900 truncate">${esc(f.filename)}</div>
-            ${f.tags.length ? `<div class="flex gap-1 mt-0.5">${f.tags.map(t => `<span class="px-1.5 py-0.5 bg-brand-50 text-brand-700 rounded text-xs">${esc(t)}</span>`).join('')}</div>` : ''}
+            ${f.tags.length ? `<div class="flex gap-1 mt-0.5 flex-wrap">${f.tags.map(t => `<span class="px-1.5 py-0.5 bg-brand-50 text-brand-700 rounded text-xs">${esc(t)}</span>`).join('')}</div>` : ''}
           </div>
         </div>
       `;
     }).join('');
+
+    // Update drop zone hint
+    dropZone.innerHTML = `
+      <svg class="mx-auto h-8 w-8 text-green-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      <p class="text-sm text-gray-600 mb-1">上传完成！可继续添加文件</p>
+      <p class="text-xs text-gray-400">拖拽或点击选择更多文件</p>
+      <input type="file" id="fileInput" multiple class="hidden">
+    `;
+    const newInput = dropZone.querySelector('#fileInput');
+    newInput.addEventListener('change', () => addFiles(newInput.files));
   }
 
   function esc(text) {
@@ -258,9 +309,5 @@
     return div.innerHTML;
   }
 </script>
-<style>
-  .fade-in { animation: fadeIn 0.2s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-</style>
 </body>
 </html>
