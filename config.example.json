@@ -1,5 +1,5 @@
 {
-  "port": 6100,
+  "port": 3000,
   "host": "0.0.0.0",
   "publicHost": "your-server-ip",
   "token": "your-napcat-token",

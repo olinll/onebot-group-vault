@@ -1,15 +1,20 @@
-# group-vault
+# 群宝箱 (group-vault)
 
-QQ 群组媒体资源收集与标签管理工具。自动收集群内图片和文件，支持标签分类、Web 浏览、群内命令发送。
+QQ 群组媒体资源收集与标签管理工具。自动收集群内图片、视频和文件，按日期归档，支持标签分类、Web 浏览、群内命令发送。
 
 ## 功能
 
-- **自动收集** — 监听 QQ 群消息，自动下载图片和文件，按日期归档
-- **Web 画廊** — 响应式图片浏览，支持 Lightbox 大图预览、键盘导航
+- **自动收集** — 监听 QQ 群消息，自动下载图片、视频和文件，按日期归档
+- **跨群收集** — 静默模式下可从 bot 所在的任何群组收集媒体，无需配置群号
+- **群组名称** — 消息和图片自动显示来源群组名称
+- **Web 画廊** — 响应式图片网格浏览，支持 Lightbox 大图预览、键盘导航
+- **消息视图** — 按时间线展示所有消息，支持图片/视频/文件/转发等多种类型筛选
 - **标签系统** — 手动打标签 + 自动识别表情包（GIF/小图/方形图）
-- **群内命令** — `#标签名` 随机发送 5 张匹配图片，`#标签名 3` 发送第 3 张
-- **WebUI 上传** — 拖拽上传文件，支持批量添加标签
+- **群内命令** — `#标签名` 随机发送 5 张匹配图片，`#标签名 N` 随机发送 N 张
+- **WebUI 上传** — 左右分栏布局，拖拽上传，支持图片/视频/文件，批量添加标签
+- **图片去重** — 基于 MD5 + 感知哈希扫描重复图片，支持自动选择和批量删除
 - **批量操作** — 多选图片批量添加/删除标签
+- **状态保持** — 画廊/消息视图切换后刷新页面自动恢复
 - **消息适配器** — 可扩展架构，支持对接不同消息源
 
 ## 快速开始
@@ -40,21 +45,25 @@ npm start
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `port` | number | HTTP 服务端口 |
+| `port` | number | HTTP 服务端口，默认 `3000` |
 | `host` | string | 监听地址，`0.0.0.0` 表示所有网卡 |
 | `publicHost` | string | 公网 IP 或域名，用于生成图片 URL |
 | `token` | string | NapCat WebSocket 访问令牌 |
 | `wsUrl` | string | NapCat WebSocket 地址，如 `ws://192.168.1.100:6101` |
-| `groupId` | number | 监听的 QQ 群号 |
+| `groupId` | number | 目标群号（非静默模式下用于交互式标签提示） |
 | `prod` | boolean | 生产模式，设为 `true` 关闭调试日志 |
+| `silent` | boolean | 静默模式，设为 `true` 从任何群组静默收集媒体，不发送任何回复 |
+
+### 静默模式
+
+将 `silent` 设为 `true` 后，bot 不会回复任何消息，只在后台静默收集所有群组的图片、视频和文件。此时 `groupId` 仅用于非静默模式下的交互式标签功能，可随意填写。
 
 ## 群内命令
 
 | 命令 | 说明 |
 |------|------|
 | `#标签名` | 随机发送 5 张该标签的图片 |
-| `#标签名 3` | 发送第 3 张（按存储顺序） |
-| `#标签名 10` | 超出总数时发送全部 |
+| `#标签名 3` | 随机发送 3 张该标签的图片 |
 | `#tags` / `#标签` | 列出所有标签及数量 |
 
 ### 交互式打标签
@@ -63,14 +72,33 @@ npm start
 
 ## WebUI
 
-- `/` — Gallery 画廊 + Messages 消息视图
-- `/upload` — 文件上传页面
+- `/` — 画廊 + 消息视图（显示群组名称，刷新保持当前视图）
+- `/upload` — 左右分栏上传页面
+- `/dedup` — 重复图片扫描与清理
 
-### Gallery 功能
+### 画廊功能
 - 图片网格浏览，悬浮显示删除按钮
 - Lightbox 大图预览，左右键导航
-- 标签筛选下拉
+- 日期/标签筛选
 - 多选模式：批量添加/删除标签
+- 右上角刷新按钮
+
+### 消息功能
+- 按时间线展示消息，显示头像、昵称、群组名称
+- 支持图片/视频/文件/转发/@/表情等多种消息类型
+- 类型筛选：纯文字、图片、视频、文件
+- 视频消息内联播放
+
+### 上传功能
+- 左侧拖拽区 + 右侧文件列表
+- 全局标签 + 每文件独立标签
+- 支持图片、视频、文件（单个最大 100MB，最多 20 个）
+- 上传进度条
+
+### 去重功能
+- 基于 MD5 精确匹配 + 感知哈希（pHash）相似度检测
+- 自动选择：保留每组最大文件
+- 批量删除，确保每组至少保留一张
 
 ## API
 
@@ -100,9 +128,16 @@ npm start
 | `POST` | `/api/upload` | 上传文件（multipart/form-data） |
 | `DELETE` | `/api/files/*path` | 删除文件（移到回收站） |
 
+### 去重
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/dedup/scan` | 扫描重复图片（MD5 + pHash） |
+| `POST` | `/api/dedup/delete` | 批量删除重复图片 `{paths[]}` |
+
 ## 二次开发 — 消息适配器
 
-group-vault 使用适配器模式分离消息收发逻辑，方便对接不同 IM 平台。
+群宝箱使用适配器模式分离消息收发逻辑，方便对接不同 IM 平台。
 
 ### 接口定义
 
@@ -118,6 +153,7 @@ interface MessageSource {
 interface MessageSender {
   name: string;
   sendGroupMsg(groupId: number, message: Segment[]): Promise<any>;
+  getGroupName(groupId: number): Promise<string>;
 }
 ```
 
@@ -151,6 +187,11 @@ export class WebhookAdapter implements MessageSource, MessageSender {
   async sendGroupMsg(groupId: number, message: Segment[]): Promise<any> {
     // 调用目标 IM 的 API 发送消息
   }
+
+  async getGroupName(groupId: number): Promise<string> {
+    // 返回群组名称，用于界面显示
+    return String(groupId);
+  }
 }
 ```
 
@@ -174,7 +215,7 @@ export function createAdapter(config: Config): MessageAdapter {
 
 ## 技术栈
 
-- **后端** — TypeScript, Express v5, WebSocket
+- **后端** — TypeScript, Express v5, WebSocket, sharp (pHash)
 - **前端** — Vanilla JS, Tailwind CSS (CDN)
 - **协议** — OneBot 11 (NapCat)
 
@@ -189,6 +230,7 @@ group-vault/
 │   ├── store.ts           # 数据持久化
 │   ├── helpers.ts         # 工具函数
 │   ├── handler.ts         # 消息业务逻辑
+│   ├── dedup.ts           # 重复图片检测（MD5 + pHash）
 │   ├── adapters/
 │   │   ├── napcat.ts      # NapCat WS 适配器
 │   │   └── index.ts       # 适配器工厂
@@ -196,10 +238,13 @@ group-vault/
 │       ├── tags.ts        # 标签 API
 │       ├── messages.ts    # 消息 API
 │       ├── files.ts       # 文件 API
-│       └── upload.ts      # 上传 API
+│       ├── upload.ts      # 上传 API
+│       └── dedup.ts       # 去重 API
 ├── webui/
-│   ├── index.html         # 主页面
-│   └── upload.html        # 上传页面
+│   ├── index.html         # 主页面（画廊 + 消息）
+│   ├── upload.html        # 上传页面
+│   ├── dedup.html         # 去重页面
+│   └── favicon.svg        # 网站图标
 ├── storage/               # 运行时数据（已 gitignore）
 │   ├── data/              # JSON 数据（messages.json, tags.json）
 │   ├── downloads/         # 下载的媒体文件
