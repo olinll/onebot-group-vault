@@ -58,6 +58,8 @@ router.get('/images', (req, res) => {
         if (tag && !tags.includes(tag)) continue;
         images.push({
           message_id: msg.message_id,
+          group_id: msg.group_id,
+          groupName: msg.groupName || '',
           user_id: msg.user_id,
           nickname: msg.nickname,
           time: msg.time,

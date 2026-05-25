@@ -22,9 +22,10 @@ export function createMessageHandler(sender: MessageSender) {
 
     if (!config.prod) console.log(`[MSG] group=${event.group_id} user=${event.user_id} text="${text}"`);
 
-    // ── Silent mode: only collect images, no responses ─────
+    // ── Silent mode: collect from any group, no responses ──
     if (config.silent) {
-      if (isTargetGroup) await processMessage(event);
+      const groupName = await sender.getGroupName(event.group_id);
+      await processMessage(event, groupName);
       return;
     }
 
@@ -61,23 +62,12 @@ export function createMessageHandler(sender: MessageSender) {
           return;
         }
 
-        let toSend: string[];
-        if (index !== null) {
-          if (index < 1) {
-            await sender.sendGroupMsg(event.group_id, [
-              { type: 'text', data: { text: '索引从 1 开始' } },
-            ]);
-            return;
-          }
-          toSend = index > matchedPaths.length ? matchedPaths : [matchedPaths[index - 1]];
-        } else {
-          const shuffled = [...matchedPaths];
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-          }
-          toSend = shuffled.slice(0, 5);
+        const shuffled = [...matchedPaths];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
+        const toSend = index !== null ? shuffled.slice(0, Math.max(1, index)) : shuffled.slice(0, 5);
 
         for (const localPath of toSend) {
           const absPath = resolve(DOWNLOADS_DIR, localPath);
@@ -92,12 +82,13 @@ export function createMessageHandler(sender: MessageSender) {
       return;
     }
 
-    // ── Below: only process in target group ────────────────
+    // ── Collect from any group ──────────────────────────────
+    const groupName = await sender.getGroupName(event.group_id);
+    await processMessage(event, groupName);
+
+    // ── Interactive tag session: only in target group ───────
     if (!isTargetGroup) return;
 
-    await processMessage(event);
-
-    // Interactive tag session
     const pending = pendingTags.get(event.user_id);
     if (pending) {
       if (text === '取消') {
@@ -163,9 +154,8 @@ export function createMessageHandler(sender: MessageSender) {
 
 // ── Message Processing ────────────────────────────────────
 
-export async function processMessage(event: GroupMessageEvent): Promise<void> {
+export async function processMessage(event: GroupMessageEvent, groupName?: string): Promise<void> {
   if (event.post_type !== 'message' || event.message_type !== 'group') return;
-  if (event.group_id !== config.groupId) return;
 
   const messages = loadMessages();
   if (messages.some((m) => m.message_id === event.message_id)) return;
@@ -177,6 +167,7 @@ export async function processMessage(event: GroupMessageEvent): Promise<void> {
   const msgRecord = {
     message_id: event.message_id,
     group_id: event.group_id,
+    groupName: groupName || '',
     user_id: event.user_id,
     nickname: event.sender?.nickname || event.nickname || '',
     time: event.time,
@@ -250,6 +241,24 @@ export async function processMessage(event: GroupMessageEvent): Promise<void> {
         }
         break;
 
+      case 'video':
+        segment.data.file = seg.data.file;
+        segment.data.url = seg.data.url;
+        if (seg.data.url) {
+          try {
+            const ext = extname(seg.data.file || '.mp4') || '.mp4';
+            const rand = crypto.randomBytes(4).toString('hex');
+            const filename = getUniqueFilename(saveDir, `vid_${event.user_id}_${rand}${ext}`);
+            const dest = join(saveDir, filename);
+            await downloadFile(seg.data.url, dest);
+            segment.data.localPath = `${datePath}/${filename}`;
+            if (!config.prod) console.log(`[VIDEO] Saved: ${segment.data.localPath}`);
+          } catch (err: any) {
+            console.error(`[VIDEO] Download failed: ${err.message}`);
+          }
+        }
+        break;
+
       case 'forward': segment.data.id = seg.data.id; break;
       case 'at': segment.data.qq = seg.data.qq; segment.data.name = seg.data.name; break;
       case 'face': segment.data.id = seg.data.id; break;
@@ -263,7 +272,7 @@ export async function processMessage(event: GroupMessageEvent): Promise<void> {
   msgRecord.segments = await Promise.all(segmentPromises);
 
   const hasMedia = msgRecord.segments.some((s) =>
-    ['image', 'file', 'forward'].includes(s.type),
+    ['image', 'file', 'video', 'forward'].includes(s.type),
   );
   if (hasMedia) {
     messages.push(msgRecord);

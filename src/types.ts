@@ -21,6 +21,7 @@ export interface MessageSegment {
 export interface MessageRecord {
   message_id: number;
   group_id: number;
+  groupName?: string;
   user_id: number;
   nickname: string;
   time: number;
@@ -56,6 +57,7 @@ export interface GroupMessageEvent {
 export interface MessageSender {
   name: string;
   sendGroupMsg(groupId: number, message: Segment[]): Promise<any>;
+  getGroupName(groupId: number): Promise<string>;
 }
 
 export interface MessageSource {

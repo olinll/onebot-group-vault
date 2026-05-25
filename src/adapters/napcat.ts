@@ -9,6 +9,7 @@ export class NapCatAdapter implements MessageSource, MessageSender {
   private apiCallId = 0;
   private pendingApiCalls = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   private messageHandler: ((event: GroupMessageEvent) => Promise<void>) | null = null;
+  private groupNameCache = new Map<number, string>();
 
   constructor(private config: Config) {}
 
@@ -75,6 +76,18 @@ export class NapCatAdapter implements MessageSource, MessageSender {
         }
       }, 10_000);
     });
+  }
+
+  async getGroupName(groupId: number): Promise<string> {
+    if (this.groupNameCache.has(groupId)) return this.groupNameCache.get(groupId)!;
+    try {
+      const res = await this.wsSendApi('get_group_info', { group_id: groupId });
+      const name = res?.data?.group_name || String(groupId);
+      this.groupNameCache.set(groupId, name);
+      return name;
+    } catch {
+      return String(groupId);
+    }
   }
 
   async sendGroupMsg(groupId: number, message: Segment[]): Promise<any> {
