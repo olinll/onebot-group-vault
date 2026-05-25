@@ -91,7 +91,8 @@ function moveDownloadsToRecycle(localPath: string): boolean {
 router.get('/stats', requireAdmin, (_req, res) => {
   const messages = loadMessages();
   let images = 0, videos = 0, files = 0;
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
   let todayMessages = 0;
 
   for (const msg of messages) {
