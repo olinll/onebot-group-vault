@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>群宝箱</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/lib/tailwind.js"></script>
   <script>
     tailwind.config = {
       theme: { extend: { colors: { brand: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' } } } }
@@ -22,16 +22,18 @@
     .batch-bar { transition: transform 0.25s ease, opacity 0.25s ease; }
     .fade-in { animation: fadeIn 0.2s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .card-focus-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: safe center; justify-content: center; padding: 1rem; overflow-y: auto; animation: fadeIn 0.2s ease; }
+    @media (min-width: 640px) { .card-focus-overlay { padding: 2rem 1.5rem; } }
+    .card-focus-overlay .card-focus-content { max-width: 40rem; width: 100%; animation: cardPop 0.2s ease; }
+    @keyframes cardPop { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     .msg-body-collapse { max-height: 120px; overflow: hidden; position: relative; }
     .msg-body-collapse::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, #fff); pointer-events: none; }
-    .masonry { columns: 2; column-gap: 0.5rem; }
-    .masonry > * { break-inside: avoid; margin-bottom: 0.5rem; }
-    @media (min-width: 640px) { .masonry { columns: 3; column-gap: 1rem; } .masonry > * { margin-bottom: 1rem; } }
-    @media (min-width: 1024px) { .masonry { columns: 4; } }
-    .masonry-msg { columns: 2; column-gap: 0.75rem; }
-    .masonry-msg > * { break-inside: avoid; margin-bottom: 0.75rem; }
-    @media (min-width: 640px) { .masonry-msg { columns: 3; column-gap: 1rem; } .masonry-msg > * { margin-bottom: 1rem; } }
-    @media (min-width: 1024px) { .masonry-msg { columns: 4; } }
+    .masonry { position: relative; --cols: 2; }
+    @media (min-width: 640px) { .masonry { --cols: 3; } }
+    @media (min-width: 1024px) { .masonry { --cols: 4; } }
+    .masonry-msg { position: relative; --cols: 2; }
+    @media (min-width: 640px) { .masonry-msg { --cols: 3; } }
+    @media (min-width: 1024px) { .masonry-msg { --cols: 4; } }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
@@ -41,17 +43,22 @@
     <div class="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-14 flex items-center justify-between gap-2">
       <a href="/" onclick="localStorage.setItem('qv-view','gallery')" class="flex items-center gap-1.5 sm:gap-2 shrink-0 hover:opacity-80 transition-opacity">
         <img src="/favicon.svg" class="w-6 h-6 sm:w-7 sm:h-7" alt="">
-        <h1 class="text-base sm:text-lg font-semibold text-gray-900">群宝箱</h1>
+        <h1 class="hidden sm:block text-base sm:text-lg font-semibold text-gray-900">群宝箱</h1>
       </a>
       <nav class="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 text-xs sm:text-sm">
         <button id="navGallery" onclick="switchView('gallery')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors bg-white text-gray-900 shadow-sm">画廊</button>
         <button id="navMessages" onclick="switchView('messages')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-gray-500 hover:text-gray-700">消息</button>
         <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
-        <a href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">去重</a>
+        <a id="navDedup" href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">去重</a>
+        <a id="navAdmin" href="/admin" class="hidden px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">管理</a>
         <button onclick="loadData()" class="ml-0.5 p-1 sm:p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors" title="刷新">
           <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
       </nav>
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <span id="currentUser" class="text-xs text-gray-400 hidden sm:inline"></span>
+        <button onclick="logout()" class="text-xs text-gray-400 hover:text-red-500 transition-colors">退出</button>
+      </div>
     </div>
   </header>
 
@@ -124,7 +131,7 @@
       <input id="lbTagInput" placeholder="输入标签..." list="tagSuggestions" onkeydown="if(event.key==='Enter')addTagFromInput()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-white/10 text-white placeholder-white/40 rounded-full text-xs sm:text-sm outline-none focus:bg-white/20 w-36 sm:w-48 transition-colors">
       <button onclick="addTagFromInput()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-brand-600 text-white rounded-full text-xs sm:text-sm hover:bg-brand-700 transition-colors">添加</button>
     </div>
-    <div class="mt-2 sm:mt-3">
+    <div id="lightboxDeleteWrap" class="mt-2 sm:mt-3 hidden">
       <button onclick="deleteCurrentImage()" class="px-3 sm:px-4 py-1 sm:py-1.5 bg-red-600/80 text-white rounded-full text-xs sm:text-sm hover:bg-red-600 transition-colors">删除图片</button>
     </div>
   </div>
@@ -142,6 +149,25 @@
   let selectedMsgIds = new Set();
   let galleryLoading = false;
   let galleryHasMore = true;
+  let isAdmin = false;
+
+  function getToken() { return localStorage.getItem('qv-token'); }
+  function getUser() { try { return JSON.parse(localStorage.getItem('qv-user')); } catch { return null; } }
+  function authHeaders() { return { 'Authorization': 'Bearer ' + getToken() }; }
+  function handleAuthError(res) {
+    if (res.status === 401) {
+      localStorage.removeItem('qv-token');
+      localStorage.removeItem('qv-user');
+      window.location.href = '/login.html';
+      return true;
+    }
+    return false;
+  }
+  function logout() {
+    localStorage.removeItem('qv-token');
+    localStorage.removeItem('qv-user');
+    window.location.href = '/login.html';
+  }
 
   function tagClass(i) { return 'tag-dot-' + (i % 5); }
 
@@ -153,7 +179,8 @@
   }
 
   async function loadDates() {
-    const res = await fetch('/api/dates');
+    const res = await fetch('/api/dates', { headers: authHeaders() });
+    if (handleAuthError(res)) return;
     const dates = await res.json();
     const sel = document.getElementById('dateFilter');
     dates.forEach(d => {
@@ -165,7 +192,8 @@
   }
 
   async function loadTagOptions() {
-    const res = await fetch('/api/tags');
+    const res = await fetch('/api/tags', { headers: authHeaders() });
+    if (handleAuthError(res)) return;
     const tags = await res.json();
     allTags = tags.map(t => t.tag);
     const sel = document.getElementById('tagFilter');
@@ -203,12 +231,12 @@
           <div class="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 ${selectedPaths.has(img.localPath) ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300'} flex items-center justify-center">
             ${selectedPaths.has(img.localPath) ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
           </div>` : ''}
-        <button class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        ${isAdmin ? `<button class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center"
                 onclick="event.stopPropagation();deleteImage(${i})" title="删除">
           <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-        <img src="${img.url}" alt="" loading="lazy" class="w-full">
-        <div class="p-1.5 sm:p-2.5">
+        </button>` : ''}
+        <img src="${img.url}" alt="" loading="lazy" class="w-full block">
+        <div class="card-footer p-1.5 sm:p-2.5">
           <div class="text-[10px] sm:text-xs font-medium text-gray-900 truncate">${esc(img.nickname || String(img.user_id))}</div>
           ${img.groupName ? `<div class="text-[9px] sm:text-[10px] text-brand-600 bg-brand-50 inline-block px-1 py-0.5 rounded truncate">${esc(img.groupName)}</div>` : ''}
           <div class="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">${new Date(img.time * 1000).toLocaleString()}</div>
@@ -216,6 +244,109 @@
         </div>
       </div>
     `;
+  }
+
+  // ── Masonry Layout ─────────────────────────────────────
+  let colHeights = [];
+  let masonryGap = 8;
+
+  function layoutMasonry(container, startIndex) {
+    const cols = parseInt(getComputedStyle(container).getPropertyValue('--cols')) || 2;
+    masonryGap = window.innerWidth >= 640 ? 16 : 8;
+    const containerWidth = container.clientWidth;
+    const colWidth = (containerWidth - masonryGap * (cols - 1)) / cols;
+
+    if (startIndex === 0) colHeights = new Array(cols).fill(0);
+
+    const elements = Array.from(container.children).slice(startIndex);
+    for (const el of elements) {
+      const ratio = parseFloat(el.dataset.ratio) || 1;
+      const minIdx = colHeights.indexOf(Math.min(...colHeights));
+      const left = minIdx * (colWidth + masonryGap);
+      const top = colHeights[minIdx];
+
+      el.style.position = 'absolute';
+      el.style.width = colWidth + 'px';
+      el.style.transform = 'translate(' + left + 'px,' + top + 'px)';
+
+      const imgHeight = colWidth / ratio;
+      const footerEl = el.querySelector('.card-footer');
+      const footerHeight = footerEl ? footerEl.offsetHeight : 60;
+      colHeights[minIdx] += imgHeight + footerHeight + masonryGap;
+    }
+
+    container.style.height = colHeights.length ? Math.max(...colHeights) + 'px' : '0';
+  }
+
+  async function preloadAndLayout(container, items, startIndex) {
+    const slice = items.slice(startIndex);
+    // Hide new cards during preload to prevent flash at (0,0)
+    for (let i = startIndex; i < container.children.length; i++) {
+      container.children[i].style.visibility = 'hidden';
+    }
+    await Promise.all(slice.map((img, i) => new Promise(resolve => {
+      const el = container.children[startIndex + i];
+      if (!el) { resolve(); return; }
+      const imgObj = new Image();
+      imgObj.onload = () => {
+        el.dataset.ratio = imgObj.naturalWidth / imgObj.naturalHeight;
+        resolve();
+      };
+      imgObj.onerror = () => { el.dataset.ratio = 1; resolve(); };
+      imgObj.src = img.url;
+    })));
+    layoutMasonry(container, startIndex);
+    // Show cards after positioning
+    for (let i = startIndex; i < container.children.length; i++) {
+      container.children[i].style.visibility = '';
+    }
+  }
+
+  function relayoutMasonry() {
+    if (currentView === 'gallery') {
+      const container = document.getElementById('galleryView');
+      if (container.children.length > 0) {
+        colHeights = [];
+        layoutMasonry(container, 0);
+      }
+    } else if (currentView === 'messages') {
+      const container = document.getElementById('messagesView');
+      if (container.children.length > 0) {
+        layoutMsgMasonry(container);
+      }
+    }
+  }
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(relayoutMasonry, 150);
+  });
+
+  function layoutMsgMasonry(container) {
+    const cols = parseInt(getComputedStyle(container).getPropertyValue('--cols')) || 2;
+    const gap = window.innerWidth >= 640 ? 16 : 8;
+    const containerWidth = container.clientWidth;
+    const colWidth = (containerWidth - gap * (cols - 1)) / cols;
+    const heights = new Array(cols).fill(0);
+    const elements = Array.from(container.children);
+
+    // Measure actual heights
+    for (const el of elements) {
+      el.style.position = 'absolute';
+      el.style.width = colWidth + 'px';
+      el.style.visibility = 'hidden';
+    }
+
+    for (const el of elements) {
+      const h = el.offsetHeight;
+      const minIdx = heights.indexOf(Math.min(...heights));
+      el.style.transform = 'translate(' + (minIdx * (colWidth + gap)) + 'px,' + heights[minIdx] + 'px)';
+      el.style.visibility = '';
+      heights[minIdx] += h + gap;
+    }
+
+    container.style.height = heights.length ? Math.max(...heights) + 'px' : '0';
   }
 
   async function loadGallery(date, page, tag, append) {
@@ -231,7 +362,8 @@
     const batchBtn = document.getElementById('btnBatchMode');
 
     try {
-      const res = await fetch('/api/images?' + params.toString());
+      const res = await fetch('/api/images?' + params.toString(), { headers: authHeaders() });
+      if (handleAuthError(res)) return;
       const data = await res.json();
 
       if (append) {
@@ -239,6 +371,7 @@
         imageList = imageList.concat(data.items);
         const html = data.items.map((img, i) => renderGalleryCard(img, startIdx + i)).join('');
         container.insertAdjacentHTML('beforeend', html);
+        await preloadAndLayout(container, imageList, startIdx);
       } else {
         imageList = data.items;
         if (data.items.length === 0) {
@@ -249,6 +382,7 @@
           empty.classList.add('hidden');
           batchBtn.classList.remove('hidden');
           container.innerHTML = data.items.map((img, i) => renderGalleryCard(img, i)).join('');
+          await preloadAndLayout(container, imageList, 0);
         }
       }
 
@@ -276,7 +410,8 @@
       if (date) params.set('date', date);
       if (tag) params.set('tag', tag);
       if (type) params.set('type', type);
-      const res = await fetch('/api/messages?' + params.toString());
+      const res = await fetch('/api/messages?' + params.toString(), { headers: authHeaders() });
+      if (handleAuthError(res)) return;
       const data = await res.json();
 
       const container = document.getElementById('messagesView');
@@ -293,85 +428,43 @@
           const time = new Date((msg.time || 0) * 1000).toLocaleString();
           const group = msg.groupName ? '<span class="px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded text-[10px] sm:text-xs font-medium truncate max-w-[80px] sm:max-w-none">' + esc(msg.groupName) + '</span>' : '';
 
-          // Collect media segments
-          const imgSegs = (msg.segments || []).filter(s => s.type === 'image' && s.data.localPath);
-          const vidSegs = (msg.segments || []).filter(s => s.type === 'video' && s.data.localPath);
-          const fileSegs = (msg.segments || []).filter(s => s.type === 'file' && s.data.localPath);
-          const isSingleImage = imgSegs.length === 1 && vidSegs.length === 0 && fileSegs.length === 0;
-          const isSingleVideo = vidSegs.length === 1 && imgSegs.length === 0 && fileSegs.length === 0;
-          const isSingleFile = fileSegs.length === 1 && imgSegs.length === 0 && vidSegs.length === 0;
+          // Render segments in original order
+          let segsHtml = '';
+          const allSegs = msg.segments || [];
+          const imgSegs = allSegs.filter(s => s.type === 'image' && s.data.localPath);
+          const isOnlyOneImg = imgSegs.length === 1 && allSegs.filter(s => s.type === 'video' || s.type === 'file').length === 0;
 
-          let mediaHtml = '';
-
-          if (isSingleImage) {
-            // Single image: full-width display
-            const s = imgSegs[0];
-            const tags = s.data.tags || [];
-            const tagHtml = tags.length ? '<div class="flex gap-1 mt-1.5 flex-wrap">' + tags.map(t => '<span class="px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded text-xs">' + esc(t) + '</span>').join('') + '</div>' : '';
-            mediaHtml = '<div class="mt-2">'
-              + '<img src="/downloads/' + s.data.localPath + '" onclick="openLightboxUrl(\'/downloads/' + s.data.localPath + '\')" loading="lazy" class="w-full max-h-[400px] object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity">'
-              + tagHtml
-              + '</div>';
-          } else if (isSingleVideo) {
-            // Single video: full-width player
-            const s = vidSegs[0];
-            mediaHtml = '<div class="mt-2">'
-              + '<video src="/downloads/' + s.data.localPath + '" controls preload="metadata" class="w-full max-h-[400px] rounded-lg"></video>'
-              + '</div>';
-          } else if (isSingleFile) {
-            // Single file: nice file card
-            const s = fileSegs[0];
-            const fname = esc(s.data.file || '文件');
-            const fsize = s.data.size ? formatFileSize(s.data.size) : '';
-            mediaHtml = '<div class="mt-2">'
-              + '<a href="/downloads/' + s.data.localPath + '" target="_blank" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group">'
-              + '<div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">'
-              + '<svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
-              + '</div>'
-              + '<div class="flex-1 min-w-0">'
-              + '<div class="text-sm font-medium text-gray-900 truncate">' + fname + '</div>'
-              + (fsize ? '<div class="text-xs text-gray-400">' + fsize + '</div>' : '')
-              + '</div>'
-              + '<svg class="w-5 h-5 text-gray-400 group-hover:text-brand-600 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>'
-              + '</a>'
-              + '</div>';
-          } else if (imgSegs.length || vidSegs.length) {
-            // Multiple media: thumbnail grid
-            mediaHtml = '<div class="flex gap-1.5 sm:gap-2 flex-wrap mt-2">';
-            for (const s of imgSegs) {
-              const tags = s.data.tags || [];
-              const tagHtml = tags.length ? '<div class="flex gap-0.5 mt-0.5">' + tags.map(t => '<span class="px-1 py-0.5 bg-brand-50 text-brand-600 rounded text-[9px]">' + esc(t) + '</span>').join('') + '</div>' : '';
-              mediaHtml += '<div><img src="/downloads/' + s.data.localPath + '" onclick="openLightboxUrl(\'/downloads/' + s.data.localPath + '\')" loading="lazy" class="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity">' + tagHtml + '</div>';
-            }
-            for (const s of vidSegs) {
-              mediaHtml += '<video src="/downloads/' + s.data.localPath + '" controls preload="metadata" class="w-32 sm:w-40 rounded-lg"></video>';
-            }
-            mediaHtml += '</div>';
-          }
-
-          // Body text (non-file text segments)
-          let bodyHtml = '';
-          for (const seg of (msg.segments || [])) {
-            if (seg.type === 'text') bodyHtml += '<p class="text-xs sm:text-sm text-gray-700">' + esc(seg.data.text || '') + '</p>';
-            else if (seg.type === 'file' && !seg.data.localPath) bodyHtml += '<p class="text-xs text-gray-400">[文件]</p>';
-            else if (seg.type === 'forward') bodyHtml += '<p class="text-xs text-amber-700">转发消息</p>';
-            else if (seg.type === 'at') bodyHtml += '<span class="text-xs text-brand-600">@' + esc(seg.data.name || seg.data.qq || '') + '</span>';
-          }
-
-          // For multi-file messages without single-file card, show file links in body
-          if (!isSingleFile) {
-            for (const seg of fileSegs) {
+          for (const seg of allSegs) {
+            if (seg.type === 'text') {
+              segsHtml += '<p class="text-xs sm:text-sm text-gray-700">' + esc(seg.data.text || '') + '</p>';
+            } else if (seg.type === 'at') {
+              segsHtml += '<span class="text-xs text-brand-600">@' + esc(seg.data.name || seg.data.qq || '') + '</span>';
+            } else if (seg.type === 'forward') {
+              segsHtml += '<p class="text-xs text-amber-700">转发消息</p>';
+            } else if (seg.type === 'image' && seg.data.localPath) {
+              const tags = seg.data.tags || [];
+              const tagHtml = tags.length ? '<div class="flex gap-0.5 sm:gap-1 mt-0.5 sm:mt-1 flex-wrap">' + tags.map(t => '<span class="px-1 sm:px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded text-[9px] sm:text-xs">' + esc(t) + '</span>').join('') + '</div>' : '';
+              if (isOnlyOneImg) {
+                segsHtml += '<div class="mt-2"><img src="/downloads/' + seg.data.localPath + '" data-localpath="' + esc(seg.data.localPath) + '" data-tags="' + esc((tags||[]).join(',')) + '" onclick="event.stopPropagation();openLightboxUrl(\'/downloads/' + seg.data.localPath + '\')" loading="lazy" class="w-full max-h-[400px] object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity">' + tagHtml + '</div>';
+              } else {
+                segsHtml += '<div class="inline-block mr-1 mb-1"><img src="/downloads/' + seg.data.localPath + '" data-localpath="' + esc(seg.data.localPath) + '" data-tags="' + esc((tags||[]).join(',')) + '" onclick="event.stopPropagation();openLightboxUrl(\'/downloads/' + seg.data.localPath + '\')" loading="lazy" class="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity">' + tagHtml + '</div>';
+              }
+            } else if (seg.type === 'video' && seg.data.localPath) {
+              segsHtml += '<div class="mt-2"><video src="/downloads/' + seg.data.localPath + '" controls preload="metadata" class="w-full max-h-[400px] sm:max-w-md rounded-lg"></video></div>';
+            } else if (seg.type === 'file' && seg.data.localPath) {
               const fname = esc(seg.data.file || '文件');
-              const fsize = seg.data.size ? ' (' + formatFileSize(seg.data.size) + ')' : '';
-              bodyHtml += '<a href="/downloads/' + seg.data.localPath + '" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700">'
+              const fsize = seg.data.size ? formatFileSize(seg.data.size) : '';
+              segsHtml += '<a href="/downloads/' + seg.data.localPath + '" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 mt-1">'
                 + '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>'
-                + fname + fsize + '</a>';
+                + fname + (fsize ? ' (' + fsize + ')' : '') + '</a>';
+            } else if (seg.type === 'file' && !seg.data.localPath) {
+              segsHtml += '<p class="text-xs text-gray-400">[文件]</p>';
             }
           }
 
-          const delBtn = batchMode ? '' : '<button onclick="deleteMessage(' + msg.message_id + ')" class="text-[10px] sm:text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-1.5 sm:px-2 py-0.5 rounded transition-colors shrink-0">删除</button>';
+          const delBtn = (batchMode || !isAdmin) ? '' : '<button onclick="event.stopPropagation();deleteMessage(' + msg.message_id + ')" class="text-[10px] sm:text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-1.5 sm:px-2 py-0.5 rounded transition-colors shrink-0">删除</button>';
           const isSelected = selectedMsgIds.has(msg.message_id);
-          const clickAttr = batchMode ? ' onclick="toggleMsgSelect(' + msg.message_id + ')"' : '';
+          const clickAttr = batchMode ? ' onclick="toggleMsgSelect(' + msg.message_id + ')"' : ' onclick="focusCard(this, event)"';
           const checkHtml = batchMode ? '<div class="absolute top-2 left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 flex items-center justify-center ' + (isSelected ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300') + '">' + (isSelected ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : '') + '</div>' : '';
 
           html += '<div class="relative bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in cursor-pointer ' + (isSelected ? 'ring-2 ring-brand-500' : '') + '"' + clickAttr + ' data-msgid="' + msg.message_id + '">'
@@ -386,11 +479,11 @@
             + delBtn
             + '</div>'
             + '</div>'
-            + mediaHtml
-            + (bodyHtml ? '<div class="mt-1">' + bodyHtml + '</div>' : '')
+            + (segsHtml ? '<div class="mt-1">' + segsHtml + '</div>' : '')
             + '</div>';
         }
         container.innerHTML = html;
+        layoutMsgMasonry(container);
       }
 
       document.getElementById('stats').textContent = (data.total || 0) + ' 条消息';
@@ -439,6 +532,7 @@
     document.getElementById('pagination').classList.toggle('hidden', view !== 'messages');
     if (view !== 'gallery') showGalleryLoading(false);
     loadData();
+    setTimeout(relayoutMasonry, 50);
   }
 
   // ── Lightbox ───────────────────────────────────────────
@@ -451,6 +545,42 @@
     requestAnimationFrame(() => updateLightbox());
   }
 
+  function focusCard(el, e) {
+    if (batchMode) return;
+    if (e && e.target.closest('button, a, input, video')) return;
+    if (document.getElementById('cardFocusOverlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'cardFocusOverlay';
+    overlay.className = 'card-focus-overlay';
+    overlay.onclick = (ev) => { if (ev.target === overlay) unfocusCard(); };
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card-focus-content';
+    wrapper.innerHTML = el.outerHTML;
+
+    // Enlarge thumbnail images
+    wrapper.querySelectorAll('img').forEach(img => {
+      img.style.width = '100%';
+      img.style.height = 'auto';
+      img.style.maxHeight = '50vh';
+      img.style.objectFit = 'contain';
+      img.classList.remove('object-cover');
+    });
+
+    overlay.appendChild(wrapper);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+  }
+
+  function unfocusCard() {
+    const overlay = document.getElementById('cardFocusOverlay');
+    if (overlay) {
+      overlay.remove();
+      document.body.style.overflow = '';
+    }
+  }
+
   function openLightboxUrl(url) {
     let idx = imageList.findIndex(img => img.url === url || `/downloads/${img.localPath}` === url);
     if (idx < 0) {
@@ -458,7 +588,10 @@
       const imgs = document.querySelectorAll('#messagesView img[onclick*="openLightboxUrl"]');
       imageList = Array.from(imgs).map(el => {
         const m = el.getAttribute('onclick').match(/openLightboxUrl\('([^']+)'\)/);
-        return m ? { url: m[1], localPath: m[1].replace('/downloads/', ''), tags: [] } : null;
+        if (!m) return null;
+        const localPath = el.dataset.localpath || m[1].replace('/downloads/', '');
+        const tagsStr = el.dataset.tags || '';
+        return { url: m[1], localPath, tags: tagsStr ? tagsStr.split(',') : [] };
       }).filter(Boolean);
       idx = imageList.findIndex(img => img.url === url);
       if (idx < 0) {
@@ -528,7 +661,7 @@
   async function saveTags(localPath, tags) {
     await fetch('/api/tags', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ localPath, tags }),
     });
   }
@@ -547,9 +680,14 @@
   }
 
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('cardFocusOverlay')) { unfocusCard(); return; }
+      const lb = document.getElementById('lightbox');
+      if (!lb.classList.contains('hidden')) closeLightbox();
+      return;
+    }
     const lb = document.getElementById('lightbox');
     if (lb.classList.contains('hidden')) return;
-    if (e.key === 'Escape') closeLightbox();
     if (e.key === 'ArrowLeft') navLightbox(e, -1);
     if (e.key === 'ArrowRight') navLightbox(e, 1);
   });
@@ -616,7 +754,7 @@
     document.getElementById('btnBatchMode').classList.add('bg-brand-50', 'text-brand-700', 'border-brand-300');
     const isGallery = currentView === 'gallery';
     document.getElementById('batchGalleryActions').classList.toggle('hidden', !isGallery);
-    document.getElementById('batchMsgActions').classList.toggle('hidden', isGallery);
+    document.getElementById('batchMsgActions').classList.toggle('hidden', isGallery || !isAdmin);
     updateBatchBar();
     if (isGallery) loadGallery(document.getElementById('dateFilter').value, currentPage, document.getElementById('tagFilter').value);
     else loadData();
@@ -664,7 +802,7 @@
     const tags = tagsRaw.split(/\s+/).filter(t => t);
     const res = await fetch('/api/tags/batch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ localPaths: [...selectedPaths], tags, mode: 'add' }),
     });
     const data = await res.json();
@@ -678,7 +816,7 @@
     const tags = tagsRaw.split(/\s+/).filter(t => t);
     const res = await fetch('/api/tags/batch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ localPaths: [...selectedPaths], tags, mode: 'remove' }),
     });
     const data = await res.json();
@@ -717,7 +855,7 @@
     const img = imageList[index];
     if (!img) return;
     if (!await showConfirm(`确认删除此图片？\n${img.file || img.localPath}`)) return;
-    const res = await fetch(`/api/files/${img.localPath}`, { method: 'DELETE' });
+    const res = await fetch(`/api/files/${img.localPath}`, { method: 'DELETE', headers: authHeaders() });
     const data = await res.json();
     if (data.ok) { imageList.splice(index, 1); loadData(); }
   }
@@ -726,7 +864,7 @@
 
   async function deleteMessage(messageId) {
     if (!await showConfirm('确认删除此消息？')) return;
-    const res = await fetch('/api/messages/' + messageId, { method: 'DELETE' });
+    const res = await fetch('/api/messages/' + messageId, { method: 'DELETE', headers: authHeaders() });
     if ((await res.json()).ok) loadData();
   }
 
@@ -753,7 +891,7 @@
     let ok = 0;
     for (const id of selectedMsgIds) {
       try {
-        const res = await fetch('/api/messages/' + id, { method: 'DELETE' });
+        const res = await fetch('/api/messages/' + id, { method: 'DELETE', headers: authHeaders() });
         if ((await res.json()).ok) ok++;
       } catch {}
     }
@@ -761,13 +899,30 @@
     loadData();
   }
 
-  Promise.all([loadDates(), loadTagOptions()]).then(() => {
+  (async function init() {
+    try {
+      const res = await fetch('/api/auth/me', { headers: authHeaders() });
+      if (!res.ok) { window.location.href = '/login.html'; return; }
+      const user = await res.json();
+      isAdmin = user.role === 'admin';
+      document.getElementById('currentUser').textContent = user.username;
+
+      // Role-based UI
+      document.getElementById('navDedup').classList.toggle('hidden', !isAdmin);
+      document.getElementById('navAdmin').classList.toggle('hidden', !isAdmin);
+      document.getElementById('lightboxDeleteWrap').classList.toggle('hidden', !isAdmin);
+    } catch {
+      window.location.href = '/login.html';
+      return;
+    }
+
+    await Promise.all([loadDates(), loadTagOptions()]);
     const urlView = new URLSearchParams(location.search).get('view');
     const saved = localStorage.getItem('qv-view');
     const view = urlView || saved || 'gallery';
     if (view === 'messages') switchView('messages');
     else loadData();
-  });
+  })();
 
   // Infinite scroll for gallery
   const sentinel = document.getElementById('gallerySentinel');

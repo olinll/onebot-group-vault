@@ -1,15 +1,15 @@
 import { existsSync, mkdirSync } from 'fs';
 import { join, resolve, extname } from 'path';
 import crypto from 'crypto';
-import config from './config.js';
+import config from '../core/config.js';
 import {
   loadMessages, saveMessages, loadTags, saveTags,
   getTagsForPath, setTagsForPath,
-} from './store.js';
-import { getDatePath, downloadFile, getImageDimensions, getUniqueFilename } from './helpers.js';
-import type { PendingTagSession, MessageSender, GroupMessageEvent } from './types.js';
+} from '../store/messages.js';
+import { getDatePath, downloadFile, getImageDimensions, getUniqueFilename } from '../core/helpers.js';
+import type { PendingTagSession, MessageSender, GroupMessageEvent } from '../core/types.js';
 
-const DOWNLOADS_DIR = join(__dirname, '..', 'storage', 'downloads');
+const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
 const pendingTags = new Map<number, PendingTagSession>();
 
 // ── Message Handler (pure business logic) ─────────────────
@@ -25,7 +25,7 @@ export function createMessageHandler(sender: MessageSender) {
     // ── Silent mode: collect from any group, no responses ──
     if (config.silent) {
       const groupName = await sender.getGroupName(event.group_id);
-      await processMessage(event, groupName);
+      await processMessage(event, groupName, sender);
       return;
     }
 
@@ -82,9 +82,11 @@ export function createMessageHandler(sender: MessageSender) {
       return;
     }
 
-    // ── Collect from any group ──────────────────────────────
-    const groupName = await sender.getGroupName(event.group_id);
-    await processMessage(event, groupName);
+    // ── Collect: silent=all groups, non-silent=target group only ──
+    if (config.silent || isTargetGroup) {
+      const groupName = await sender.getGroupName(event.group_id);
+      await processMessage(event, groupName, sender);
+    }
 
     // ── Interactive tag session: only in target group ───────
     if (!isTargetGroup) return;
@@ -152,9 +154,97 @@ export function createMessageHandler(sender: MessageSender) {
   };
 }
 
+// ── Forward Message Extraction (recursive) ────────────────
+
+async function extractForward(
+  segData: Record<string, any>,
+  sender: MessageSender | undefined,
+  userId: number,
+  saveDir: string,
+  datePath: string,
+  depth: number,
+): Promise<{ segments: { type: string; data: Record<string, any> }[]; imgCount: number; maxDepth: number }> {
+  const MAX_DEPTH = 10;
+  if (depth > MAX_DEPTH) {
+    if (!config.prod) console.log(`[FWD] Max depth ${MAX_DEPTH} reached, stopping recursion`);
+    return { segments: [], imgCount: 0, maxDepth: depth };
+  }
+
+  let nested: any[] | undefined = segData?.content || segData?.messages;
+  const forwardId = segData?.id || segData?.message_id;
+
+  if ((!nested || nested.length === 0) && forwardId && sender?.getForwardMsg) {
+    if (!config.prod) console.log(`[FWD] depth=${depth} Fetching forward id=${forwardId}`);
+    const result = await sender.getForwardMsg(forwardId);
+    nested = result?.messages;
+  }
+
+  if (!nested || nested.length === 0) {
+    if (!config.prod) console.log(`[FWD] depth=${depth} No nested messages, keys: ${Object.keys(segData || {}).join(',')}`);
+    return { segments: [], imgCount: 0, maxDepth: depth };
+  }
+
+  const flat: { type: string; data: Record<string, any> }[] = [];
+  let imgCount = 0;
+  let maxDepth = depth;
+
+  for (const child of nested) {
+    const parts: any[] = child.message || [];
+    const nickname = child.sender?.nickname || '';
+
+    for (const part of parts) {
+      if (part.type === 'forward') {
+        // Recurse into nested forward
+        const sub = await extractForward(part.data, sender, userId, saveDir, datePath, depth + 1);
+        flat.push(...sub.segments);
+        imgCount += sub.imgCount;
+        maxDepth = Math.max(maxDepth, sub.maxDepth);
+      } else if (part.type === 'image' && part.data?.url) {
+        try {
+          const ext = extname(part.data.file || '.png') || '.png';
+          const rand = crypto.randomBytes(4).toString('hex');
+          const filename = getUniqueFilename(saveDir, `fwd_${userId}_${rand}${ext}`);
+          const dest = join(saveDir, filename);
+          await downloadFile(part.data.url, dest);
+          flat.push({
+            type: 'image',
+            data: { file: part.data.file, localPath: `${datePath}/${filename}`, owner: userId, fromForward: true },
+          });
+          imgCount++;
+          if (!config.prod) console.log(`[FWD] depth=${depth} Saved image: ${datePath}/${filename}`);
+        } catch (err: any) {
+          console.error(`[FWD] depth=${depth} Image download failed: ${err.message}`);
+        }
+      } else if (part.type === 'text' && part.data?.text) {
+        flat.push({
+          type: 'text',
+          data: { text: (nickname ? nickname + ': ' : '') + part.data.text, fromForward: true },
+        });
+      } else if (part.type === 'video' && part.data?.url) {
+        try {
+          const ext = extname(part.data.file || '.mp4') || '.mp4';
+          const rand = crypto.randomBytes(4).toString('hex');
+          const filename = getUniqueFilename(saveDir, `fwd_${userId}_${rand}${ext}`);
+          const dest = join(saveDir, filename);
+          await downloadFile(part.data.url, dest);
+          flat.push({
+            type: 'video',
+            data: { localPath: `${datePath}/${filename}`, fromForward: true },
+          });
+          if (!config.prod) console.log(`[FWD] depth=${depth} Saved video: ${datePath}/${filename}`);
+        } catch (err: any) {
+          console.error(`[FWD] depth=${depth} Video download failed: ${err.message}`);
+        }
+      }
+    }
+  }
+
+  return { segments: flat, imgCount, maxDepth };
+}
+
 // ── Message Processing ────────────────────────────────────
 
-export async function processMessage(event: GroupMessageEvent, groupName?: string): Promise<void> {
+export async function processMessage(event: GroupMessageEvent, groupName?: string, sender?: MessageSender): Promise<void> {
   if (event.post_type !== 'message' || event.message_type !== 'group') return;
 
   const messages = loadMessages();
@@ -176,12 +266,15 @@ export async function processMessage(event: GroupMessageEvent, groupName?: strin
     segments: [] as { type: string; data: Record<string, any> }[],
   };
 
-  const segmentPromises = (event.message || []).map(async (seg) => {
+  // Process segments sequentially to preserve order (forward downloads are async)
+  const rawSegments: { type: string; data: Record<string, any> }[][] = [];
+  for (const seg of (event.message || [])) {
     const segment: { type: string; data: Record<string, any> } = { type: seg.type, data: {} };
 
     switch (seg.type) {
       case 'text':
         segment.data.text = seg.data.text;
+        rawSegments.push([segment]);
         break;
 
       case 'image':
@@ -221,6 +314,7 @@ export async function processMessage(event: GroupMessageEvent, groupName?: strin
             console.error(`[IMG] Download failed: ${err.message}`);
           }
         }
+        rawSegments.push([segment]);
         break;
 
       case 'file':
@@ -239,6 +333,7 @@ export async function processMessage(event: GroupMessageEvent, groupName?: strin
             console.error(`[FILE] Download failed: ${err.message}`);
           }
         }
+        rawSegments.push([segment]);
         break;
 
       case 'video':
@@ -257,20 +352,23 @@ export async function processMessage(event: GroupMessageEvent, groupName?: strin
             console.error(`[VIDEO] Download failed: ${err.message}`);
           }
         }
+        rawSegments.push([segment]);
         break;
 
-      case 'forward':
-        return [];
-      case 'at': segment.data.qq = seg.data.qq; segment.data.name = seg.data.name; break;
-      case 'face': segment.data.id = seg.data.id; break;
-      case 'reply': segment.data.id = seg.data.id; break;
-      default: segment.data = seg.data; break;
+      case 'forward': {
+        const forwardId = seg.data?.id || seg.data?.message_id;
+        const result = await extractForward(seg.data, sender, event.user_id, saveDir, datePath, 0);
+        if (!config.prod) console.log(`[FWD] id=${forwardId} → ${result.segments.length} segments (${result.imgCount} images, depth=${result.maxDepth})`);
+        rawSegments.push(result.segments);
+        break;
+      }
+      case 'at': segment.data.qq = seg.data.qq; segment.data.name = seg.data.name; rawSegments.push([segment]); break;
+      case 'face': segment.data.id = seg.data.id; rawSegments.push([segment]); break;
+      case 'reply': segment.data.id = seg.data.id; rawSegments.push([segment]); break;
+      default: segment.data = seg.data; rawSegments.push([segment]); break;
     }
+  }
 
-    return segment;
-  });
-
-  const rawSegments = await Promise.all(segmentPromises);
   msgRecord.segments = rawSegments.flat();
 
   const hasMedia = msgRecord.segments.some((s) =>

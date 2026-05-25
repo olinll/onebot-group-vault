@@ -3,4 +3,5 @@ dist/
 storage/
 .claude/
 config.json
+.env
 *.log

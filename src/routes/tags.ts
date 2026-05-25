@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
   loadTags, saveTags, getTagsForPath, setTagsForPath, removePathFromTags,
-} from '../store.js';
+} from '../store/messages.js';
 
 const router = Router();
 

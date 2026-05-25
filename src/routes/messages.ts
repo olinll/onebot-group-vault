@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { existsSync, mkdirSync, renameSync } from 'fs';
 import { join, dirname, extname, basename } from 'path';
-import { loadMessages, saveMessages, loadTags, saveTags, removePathFromTags, getTagsForPath } from '../store.js';
+import { loadMessages, saveMessages, loadTags, saveTags, removePathFromTags, getTagsForPath } from '../store/messages.js';
+import { requireAdmin } from '../services/auth.js';
 
 const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
 const RECYCLE_DIR = join(__dirname, '..', '..', 'storage', 'recycle');
@@ -98,8 +99,8 @@ router.get('/dates', (_req, res) => {
   res.json(dates);
 });
 
-router.delete('/messages/:messageId', (req, res) => {
-  const messageId = parseInt(req.params.messageId);
+router.delete('/messages/:messageId', requireAdmin, (req, res) => {
+  const messageId = parseInt(req.params.messageId as string);
   const messages = loadMessages();
   const target = messages.find((m) => m.message_id === messageId);
   if (!target) {

@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import type { Config, MessageSource, MessageSender, GroupMessageEvent, Segment } from '../types.js';
+import type { Config, MessageSource, MessageSender, GroupMessageEvent, Segment } from '../core/types.js';
 
 export class NapCatAdapter implements MessageSource, MessageSender {
   readonly name = 'napcat-ws';
@@ -97,6 +97,16 @@ export class NapCatAdapter implements MessageSource, MessageSender {
       return res;
     } catch (err: any) {
       console.error('[WS] send_group_msg failed:', err.message);
+    }
+  }
+
+  async getForwardMsg(messageId: number): Promise<{ messages?: GroupMessageEvent[] } | null> {
+    try {
+      const res = await this.wsSendApi('get_forward_msg', { message_id: messageId });
+      return res?.data ?? null;
+    } catch (err: any) {
+      if (!this.config.prod) console.error('[WS] get_forward_msg failed:', err.message);
+      return null;
     }
   }
 }

@@ -1,4 +1,4 @@
-import type { Config, MessageSource, MessageSender } from '../types.js';
+import type { Config, MessageSource, MessageSender } from '../core/types.js';
 import { NapCatAdapter } from './napcat.js';
 
 export type MessageAdapter = MessageSource & MessageSender;

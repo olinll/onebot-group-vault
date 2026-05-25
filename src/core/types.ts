@@ -9,6 +9,7 @@ export interface Config {
   groupId: number;
   prod: boolean;
   silent?: boolean;
+  jwtSecret?: string;
 }
 
 // ── Messages ──────────────────────────────────────────────
@@ -58,6 +59,7 @@ export interface MessageSender {
   name: string;
   sendGroupMsg(groupId: number, message: Segment[]): Promise<any>;
   getGroupName(groupId: number): Promise<string>;
+  getForwardMsg?(messageId: number): Promise<{ messages?: GroupMessageEvent[] } | null>;
 }
 
 export interface MessageSource {
@@ -73,4 +75,18 @@ export interface PendingTagSession {
   localPath: string;
   timer: ReturnType<typeof setTimeout>;
   message_id: number;
+}
+
+// ── Auth ────────────────────────────────────────────────
+
+export interface User {
+  username: string;
+  password: string;
+  role: 'user' | 'admin';
+  createdAt: number;
+}
+
+export interface AuthPayload {
+  username: string;
+  role: 'user' | 'admin';
 }

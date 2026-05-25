@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理 - 群宝箱</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script src="/lib/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { brand: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' } } } }
+    }
+  </script>
+  <style>
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-14 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-1.5 sm:gap-2 shrink-0 hover:opacity-80 transition-opacity">
+        <img src="/favicon.svg" class="w-6 h-6 sm:w-7 sm:h-7" alt="">
+        <h1 class="hidden sm:block text-base sm:text-lg font-semibold text-gray-900">群宝箱</h1>
+      </a>
+      <nav class="flex gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 text-xs sm:text-sm">
+        <a href="/" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">画廊</a>
+        <a href="/?view=messages" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">消息</a>
+        <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
+        <a href="/admin" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium bg-white text-gray-900 shadow-sm">管理</a>
+      </nav>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <span id="currentUser" class="text-xs sm:text-sm text-gray-500"></span>
+        <button onclick="logout()" class="text-xs sm:text-sm text-gray-500 hover:text-red-600 transition-colors">退出</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+
+    <!-- Add User -->
+    <div class="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
+      <h2 class="text-sm font-semibold text-gray-700 mb-3">添加用户</h2>
+      <form id="addForm" onsubmit="addUser(event)" class="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <input id="newUsername" placeholder="用户名" required
+          class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+        <input id="newPassword" type="password" placeholder="密码（至少6位）" required minlength="6"
+          class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+        <select id="newRole" class="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+          <option value="user">普通用户</option>
+          <option value="admin">管理员</option>
+        </select>
+        <button type="submit" class="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors shrink-0">添加</button>
+      </form>
+      <div id="addError" class="hidden mt-2 text-sm text-red-600"></div>
+    </div>
+
+    <!-- User List -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-700">用户列表</h2>
+      </div>
+      <div id="userList" class="divide-y divide-gray-100"></div>
+    </div>
+
+  </main>
+
+  <!-- Edit Modal -->
+  <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 sm:p-6">
+      <h3 class="text-base font-semibold text-gray-900 mb-4">编辑用户：<span id="editUsername" class="text-brand-600"></span></h3>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">新密码（留空不修改）</label>
+          <input id="editPassword" type="password" placeholder="至少6位"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">角色</label>
+          <select id="editRole"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </div>
+        <div id="editError" class="hidden text-sm text-red-600"></div>
+      </div>
+      <div class="flex justify-end gap-2 mt-5">
+        <button onclick="closeEditModal()" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">取消</button>
+        <button onclick="saveEdit()" class="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors">保存</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  function getToken() { return localStorage.getItem('qv-token'); }
+  function authHeaders() { return { 'Authorization': 'Bearer ' + getToken() }; }
+  function logout() {
+    localStorage.removeItem('qv-token');
+    localStorage.removeItem('qv-user');
+    window.location.href = '/login.html';
+  }
+
+  let currentUser = null;
+  let editingUser = null;
+
+  (async function init() {
+    try {
+      const res = await fetch('/api/auth/me', { headers: authHeaders() });
+      if (!res.ok) { window.location.href = '/login.html'; return; }
+      currentUser = await res.json();
+      if (currentUser.role !== 'admin') { window.location.href = '/'; return; }
+      document.getElementById('currentUser').textContent = currentUser.username;
+      loadUsers();
+    } catch {
+      window.location.href = '/login.html';
+    }
+  })();
+
+  async function loadUsers() {
+    const res = await fetch('/api/auth/users', { headers: authHeaders() });
+    if (res.status === 401) { window.location.href = '/login.html'; return; }
+    const users = await res.json();
+
+    const list = document.getElementById('userList');
+    if (users.length === 0) {
+      list.innerHTML = '<div class="px-6 py-8 text-center text-sm text-gray-400">暂无用户</div>';
+      return;
+    }
+
+    list.innerHTML = users.map(u => {
+      const isMe = u.username === currentUser.username;
+      const roleLabel = u.role === 'admin'
+        ? '<span class="px-2 py-0.5 bg-brand-50 text-brand-700 rounded text-xs font-medium">管理员</span>'
+        : '<span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">普通用户</span>';
+      const date = new Date(u.createdAt).toLocaleDateString('zh-CN');
+      return '<div class="flex items-center justify-between px-4 sm:px-6 py-3 hover:bg-gray-50 transition-colors fade-in">'
+        + '<div class="flex items-center gap-3 min-w-0">'
+        + '<span class="text-sm font-medium text-gray-900">' + esc(u.username) + (isMe ? ' <span class="text-gray-400 font-normal">(你)</span>' : '') + '</span>'
+        + roleLabel
+        + '<span class="text-xs text-gray-400 hidden sm:inline">' + date + '</span>'
+        + '</div>'
+        + '<div class="flex items-center gap-1">'
+        + '<button onclick="openEditModal(\'' + esc(u.username) + '\',\'' + u.role + '\')" class="p-1.5 text-gray-400 hover:text-brand-600 transition-colors">'
+        + '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>'
+        + '</button>'
+        + (isMe ? '' : '<button onclick="deleteUser(\'' + esc(u.username) + '\')" class="p-1.5 text-gray-400 hover:text-red-600 transition-colors">'
+        + '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
+        + '</button>')
+        + '</div></div>';
+    }).join('');
+  }
+
+  async function addUser(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('addError');
+    errEl.classList.add('hidden');
+
+    const username = document.getElementById('newUsername').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const role = document.getElementById('newRole').value;
+
+    const res = await fetch('/api/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ username, password, role }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('addForm').reset();
+    loadUsers();
+  }
+
+  function openEditModal(username, role) {
+    editingUser = username;
+    document.getElementById('editUsername').textContent = username;
+    document.getElementById('editPassword').value = '';
+    document.getElementById('editRole').value = role;
+    document.getElementById('editError').classList.add('hidden');
+    document.getElementById('editModal').classList.remove('hidden');
+    document.getElementById('editModal').classList.add('flex');
+  }
+
+  function closeEditModal() {
+    editingUser = null;
+    document.getElementById('editModal').classList.add('hidden');
+    document.getElementById('editModal').classList.remove('flex');
+  }
+
+  async function saveEdit() {
+    if (!editingUser) return;
+    const errEl = document.getElementById('editError');
+    errEl.classList.add('hidden');
+
+    const password = document.getElementById('editPassword').value;
+    const role = document.getElementById('editRole').value;
+    const body = { role };
+    if (password) body.password = password;
+
+    const res = await fetch('/api/auth/users/' + encodeURIComponent(editingUser), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    closeEditModal();
+    loadUsers();
+  }
+
+  async function deleteUser(username) {
+    if (!confirm('确认删除用户「' + username + '」？')) return;
+    const res = await fetch('/api/auth/users/' + encodeURIComponent(username), {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if ((await res.json()).ok) loadUsers();
+  }
+
+  function esc(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+</script>
+</body>
+</html>

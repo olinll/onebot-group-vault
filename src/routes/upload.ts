@@ -3,8 +3,8 @@ import multer from 'multer';
 import { join, extname } from 'path';
 import crypto from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
-import { loadMessages, saveMessages, loadTags, saveTags, setTagsForPath, getTagsForPath } from '../store.js';
-import { getDatePath, getUniqueFilename, getImageDimensions } from '../helpers.js';
+import { loadMessages, saveMessages, loadTags, saveTags, setTagsForPath, getTagsForPath } from '../store/messages.js';
+import { getDatePath, getUniqueFilename, getImageDimensions } from '../core/helpers.js';
 
 const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
 

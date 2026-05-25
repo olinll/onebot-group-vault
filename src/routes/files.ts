@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import { existsSync, mkdirSync, renameSync } from 'fs';
 import { join, dirname, extname, basename } from 'path';
-import config from '../config.js';
-import { loadMessages, saveMessages, loadTags, saveTags, removePathFromTags } from '../store.js';
+import config from '../core/config.js';
+import { loadMessages, saveMessages, loadTags, saveTags, removePathFromTags } from '../store/messages.js';
+import { requireAdmin } from '../services/auth.js';
 
 const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
 const RECYCLE_DIR = join(__dirname, '..', '..', 'storage', 'recycle');
 
 const router = Router();
 
-router.delete('/*path', (req, res) => {
+router.delete('/*path', requireAdmin, (req, res) => {
   const localPath = Array.isArray(req.params.path)
     ? req.params.path.join('/')
     : req.params.path;

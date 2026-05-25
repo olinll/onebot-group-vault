@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import type { MessageRecord, TagEntry } from './types.js';
+import type { MessageRecord, TagEntry } from '../core/types.js';
 
-const DATA_DIR = join(__dirname, '..', 'storage', 'data');
+const DATA_DIR = join(__dirname, '..', '..', 'storage', 'data');
 const MESSAGES_FILE = join(DATA_DIR, 'messages.json');
 const TAGS_FILE = join(DATA_DIR, 'tags.json');
 

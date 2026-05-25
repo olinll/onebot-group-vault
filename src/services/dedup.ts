@@ -3,7 +3,7 @@ import { readFileSync, statSync } from 'fs';
 import { join, extname } from 'path';
 import sharp from 'sharp';
 
-const DOWNLOADS_DIR = join(__dirname, '..', 'storage', 'downloads');
+const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
 
 export interface ImageInfo {
   path: string;

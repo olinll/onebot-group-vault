@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import { existsSync, mkdirSync, renameSync } from 'fs';
 import { join, dirname, extname, basename } from 'path';
-import { loadMessages, loadTags, saveMessages, saveTags, removePathFromTags } from '../store.js';
-import { findDuplicates } from '../dedup.js';
+import { loadMessages, loadTags, saveMessages, saveTags, removePathFromTags } from '../store/messages.js';
+import { findDuplicates } from '../services/dedup.js';
+import { requireAdmin } from '../services/auth.js';
 
 const DOWNLOADS_DIR = join(__dirname, '..', '..', 'storage', 'downloads');
 const RECYCLE_DIR = join(__dirname, '..', '..', 'storage', 'recycle');
 
 const router = Router();
 
-router.get('/scan', async (_req, res) => {
+router.get('/scan', requireAdmin, async (_req, res) => {
   const messages = loadMessages();
   const imagePaths: string[] = [];
 
@@ -28,7 +29,7 @@ router.get('/scan', async (_req, res) => {
   res.json({ total: imagePaths.length, groups });
 });
 
-router.post('/delete', (req, res) => {
+router.post('/delete', requireAdmin, (req, res) => {
   const paths = req.body.paths as string[];
   if (!paths || !Array.isArray(paths) || paths.length === 0) {
     return res.status(400).json({ error: 'No paths provided' });
