@@ -52,7 +52,6 @@
         <a href="/" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">画廊</a>
         <a href="/?view=messages" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">消息</a>
         <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium bg-white text-gray-900 shadow-sm">上传</a>
-        <a id="navDedup" href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">去重</a>
         <a id="navAdmin" href="/admin" class="hidden px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">管理</a>
       </nav>
       <div class="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -132,7 +131,6 @@
       const res = await fetch('/api/auth/me', { headers: authHeaders() });
       if (!res.ok) { window.location.href = '/login.html'; return; }
       const user = await res.json();
-      document.getElementById('navDedup').classList.toggle('hidden', user.role !== 'admin');
       document.getElementById('navAdmin').classList.toggle('hidden', user.role !== 'admin');
     } catch {
       window.location.href = '/login.html';

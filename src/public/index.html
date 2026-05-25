@@ -49,7 +49,6 @@
         <button id="navGallery" onclick="switchView('gallery')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors bg-white text-gray-900 shadow-sm">画廊</button>
         <button id="navMessages" onclick="switchView('messages')" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium transition-colors text-gray-500 hover:text-gray-700">消息</button>
         <a href="/upload" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">上传</a>
-        <a id="navDedup" href="/dedup" class="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">去重</a>
         <a id="navAdmin" href="/admin" class="hidden px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 transition-colors">管理</a>
         <button onclick="loadData()" class="ml-0.5 p-1 sm:p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors" title="刷新">
           <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -908,7 +907,6 @@
       document.getElementById('currentUser').textContent = user.username;
 
       // Role-based UI
-      document.getElementById('navDedup').classList.toggle('hidden', !isAdmin);
       document.getElementById('navAdmin').classList.toggle('hidden', !isAdmin);
       document.getElementById('lightboxDeleteWrap').classList.toggle('hidden', !isAdmin);
     } catch {
