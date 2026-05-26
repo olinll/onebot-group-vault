@@ -22,11 +22,10 @@ export function createMessageHandler(sender: MessageSender) {
 
     if (!config.prod) console.log(`[MSG] group=${event.group_id} user=${event.user_id} text="${text}"`);
 
-    // ── Silent mode: collect from any group, no responses ──
+    // ── Silent mode: collect from all groups ──
     if (config.silent) {
       const groupName = await sender.getGroupName(event.group_id);
       await processMessage(event, groupName, sender);
-      return;
     }
 
     // ── #tag command: works in ALL groups ──────────────────
@@ -82,8 +81,8 @@ export function createMessageHandler(sender: MessageSender) {
       return;
     }
 
-    // ── Collect: silent=all groups, non-silent=target group only ──
-    if (config.silent || isTargetGroup) {
+    // ── Collect: non-silent mode, target group only ──
+    if (!config.silent && isTargetGroup) {
       const groupName = await sender.getGroupName(event.group_id);
       await processMessage(event, groupName, sender);
     }
