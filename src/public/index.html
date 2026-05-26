@@ -26,14 +26,12 @@
     @media (min-width: 640px) { .card-focus-overlay { padding: 2rem 1.5rem; } }
     .card-focus-overlay .card-focus-content { max-width: 40rem; width: 100%; animation: cardPop 0.2s ease; }
     @keyframes cardPop { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    .msg-body-collapse { max-height: 120px; overflow: hidden; position: relative; }
-    .msg-body-collapse::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, #fff); pointer-events: none; }
     .masonry { position: relative; --cols: 2; }
     @media (min-width: 640px) { .masonry { --cols: 3; } }
     @media (min-width: 1024px) { .masonry { --cols: 4; } }
-    .masonry-msg { position: relative; --cols: 2; }
-    @media (min-width: 640px) { .masonry-msg { --cols: 3; } }
-    @media (min-width: 1024px) { .masonry-msg { --cols: 4; } }
+    .msg-grid { display: grid; grid-template-columns: repeat(1, 1fr); gap: 0.5rem; align-items: start; }
+    @media (min-width: 640px) { .msg-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; } }
+    @media (min-width: 1024px) { .msg-grid { grid-template-columns: repeat(3, 1fr); gap: 1rem; } }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
@@ -90,7 +88,7 @@
   <!-- Main -->
   <main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
     <div id="galleryView" class="masonry"></div>
-    <div id="messagesView" class="hidden masonry-msg"></div>
+    <div id="messagesView" class="hidden msg-grid"></div>
     <div id="gallerySentinel" class="hidden py-8 text-center text-sm text-gray-400">
       <span id="galleryLoadingText">加载中...</span>
     </div>
@@ -311,11 +309,6 @@
         colHeights = [];
         layoutMasonry(container, 0);
       }
-    } else if (currentView === 'messages') {
-      const container = document.getElementById('messagesView');
-      if (container.children.length > 0) {
-        layoutMsgMasonry(container);
-      }
     }
   }
 
@@ -324,32 +317,6 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(relayoutMasonry, 150);
   });
-
-  function layoutMsgMasonry(container) {
-    const cols = parseInt(getComputedStyle(container).getPropertyValue('--cols')) || 2;
-    const gap = window.innerWidth >= 640 ? 16 : 8;
-    const containerWidth = container.clientWidth;
-    const colWidth = (containerWidth - gap * (cols - 1)) / cols;
-    const heights = new Array(cols).fill(0);
-    const elements = Array.from(container.children);
-
-    // Measure actual heights
-    for (const el of elements) {
-      el.style.position = 'absolute';
-      el.style.width = colWidth + 'px';
-      el.style.visibility = 'hidden';
-    }
-
-    for (const el of elements) {
-      const h = el.offsetHeight;
-      const minIdx = heights.indexOf(Math.min(...heights));
-      el.style.transform = 'translate(' + (minIdx * (colWidth + gap)) + 'px,' + heights[minIdx] + 'px)';
-      el.style.visibility = '';
-      heights[minIdx] += h + gap;
-    }
-
-    container.style.height = heights.length ? Math.max(...heights) + 'px' : '0';
-  }
 
   async function loadGallery(date, page, tag, append) {
     if (galleryLoading) return;
@@ -447,7 +414,7 @@
               const tags = seg.data.tags || [];
               const tagHtml = tags.length ? '<div class="flex gap-0.5 sm:gap-1 mt-0.5 sm:mt-1 flex-wrap">' + tags.map(t => '<span class="px-1 sm:px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded text-[9px] sm:text-xs">' + esc(t) + '</span>').join('') + '</div>' : '';
               if (isOnlyOneImg) {
-                segsHtml += '<div class="mt-2"><img src="/downloads/' + seg.data.localPath + '" data-localpath="' + esc(seg.data.localPath) + '" data-tags="' + esc((tags||[]).join(',')) + '" onclick="event.stopPropagation();openLightboxUrl(\'/downloads/' + seg.data.localPath + '\')" loading="lazy" class="w-full max-h-[400px] object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity">' + tagHtml + '</div>';
+                segsHtml += '<div class="mt-2 overflow-hidden rounded-lg" data-imgbox><img src="/downloads/' + seg.data.localPath + '" data-localpath="' + esc(seg.data.localPath) + '" data-tags="' + esc((tags||[]).join(',')) + '" onclick="event.stopPropagation();openLightboxUrl(\'/downloads/' + seg.data.localPath + '\')" loading="lazy" class="w-full object-cover cursor-pointer hover:opacity-90 transition-opacity">' + tagHtml + '</div>';
               } else {
                 segsHtml += '<div class="inline-block mr-1 mb-1"><img src="/downloads/' + seg.data.localPath + '" data-localpath="' + esc(seg.data.localPath) + '" data-tags="' + esc((tags||[]).join(',')) + '" onclick="event.stopPropagation();openLightboxUrl(\'/downloads/' + seg.data.localPath + '\')" loading="lazy" class="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity">' + tagHtml + '</div>';
               }
@@ -469,7 +436,7 @@
           const clickAttr = batchMode ? ' onclick="toggleMsgSelect(' + msg.message_id + ')"' : ' onclick="focusCard(this, event)"';
           const checkHtml = batchMode ? '<div class="absolute top-2 left-2 z-10 w-5 h-5 sm:w-6 sm:h-6 rounded-md border-2 flex items-center justify-center ' + (isSelected ? 'bg-brand-600 border-brand-600' : 'bg-white/80 border-gray-300') + '">' + (isSelected ? '<svg class="w-3 h-3 sm:w-4 sm:h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : '') + '</div>' : '';
 
-          html += '<div class="relative bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in cursor-pointer ' + (isSelected ? 'ring-2 ring-brand-500' : '') + '"' + clickAttr + ' data-msgid="' + msg.message_id + '">'
+          html += '<div class="relative bg-white rounded-lg sm:rounded-xl shadow-sm p-3 sm:p-4 fade-in cursor-pointer hover:shadow-md transition-shadow overflow-hidden h-[488px] ' + (isSelected ? 'ring-2 ring-brand-500' : '') + '"' + clickAttr + ' data-msgid="' + msg.message_id + '">'
             + checkHtml
             + '<div class="mb-1.5 sm:mb-2 min-w-0">'
             + '<div class="flex items-center gap-1.5 sm:gap-3">'
@@ -485,7 +452,7 @@
             + '</div>';
         }
         container.innerHTML = html;
-        layoutMsgMasonry(container);
+        applyExpandButtons();
       }
 
       document.getElementById('stats').textContent = (data.total || 0) + ' 条消息';
@@ -560,6 +527,21 @@
     const wrapper = document.createElement('div');
     wrapper.className = 'card-focus-content';
     wrapper.innerHTML = el.outerHTML;
+
+    // Remove card fixed height and expand hint
+    const card = wrapper.firstElementChild;
+    if (card) {
+      card.style.height = 'auto';
+      card.style.overflow = 'visible';
+      card.classList.remove('h-[488px]', 'overflow-hidden');
+      card.querySelectorAll('.expand-hint').forEach(e => e.remove());
+    }
+
+    // Fix image containers: remove fixed height
+    wrapper.querySelectorAll('[data-imgbox]').forEach(c => {
+      c.style.height = 'auto';
+      c.style.overflow = 'visible';
+    });
 
     // Enlarge thumbnail images
     wrapper.querySelectorAll('img').forEach(img => {
@@ -827,21 +809,50 @@
 
   // ── Utilities ──────────────────────────────────────────
 
-  function applyAutoCollapse() {
-    document.querySelectorAll('.msg-body-auto').forEach(el => {
-      if (el.scrollHeight > 140) {
-        el.classList.add('msg-body-collapse');
-        el.nextElementSibling.classList.remove('hidden');
-        el.nextElementSibling.textContent = '展开';
-      }
-      el.classList.remove('msg-body-auto');
-    });
-  }
-
-  function toggleCollapse(btn) {
-    const body = btn.previousElementSibling;
-    const collapsed = body.classList.toggle('msg-body-collapse');
-    btn.textContent = collapsed ? '展开' : '收起';
+  function applyExpandButtons() {
+    const cards = document.querySelectorAll('#messagesView > div[data-msgid]');
+    const imgs = document.querySelectorAll('#messagesView img');
+    const check = () => {
+      cards.forEach(card => {
+        if (card.querySelector('.expand-hint')) return;
+        // Measure real content height
+        const origH = card.style.height;
+        card.style.height = 'auto';
+        const realH = card.scrollHeight;
+        card.style.height = origH;
+        if (realH > 488 + 2) {
+          const btn = document.createElement('div');
+          btn.className = 'expand-hint absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white via-white/90 to-transparent flex items-end justify-center pb-2 cursor-pointer z-10';
+          btn.innerHTML = '<span class="text-xs text-brand-600 bg-white/80 px-3 py-0.5 rounded-full shadow-sm border border-brand-200">展开</span>';
+          btn.onclick = function(e) {
+            e.stopPropagation();
+            const span = this.querySelector('span');
+            if (span.textContent === '展开') {
+              card.style.height = 'auto';
+              card.style.overflow = 'visible';
+              span.textContent = '收起';
+              this.style.background = 'none';
+            } else {
+              card.style.height = '488px';
+              card.style.overflow = 'hidden';
+              span.textContent = '展开';
+              this.style.background = '';
+            }
+          };
+          card.appendChild(btn);
+        }
+      });
+    };
+    if (imgs.length > 0) {
+      let loaded = 0;
+      const timeout = setTimeout(check, 1000);
+      imgs.forEach(img => {
+        if (img.complete) { loaded++; if (loaded === imgs.length) { clearTimeout(timeout); check(); } }
+        else img.addEventListener('load', () => { loaded++; if (loaded === imgs.length) { clearTimeout(timeout); check(); } }, { once: true });
+      });
+    } else {
+      check();
+    }
   }
 
   function esc(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
